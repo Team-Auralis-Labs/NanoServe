@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>How to use NanoServe — NanoServe</title>
+  <style>
+    :root { --bg:#0f1419; --fg:#e7ecf1; --accent:#3b82f6; --muted:#94a3b8; --card:#1a2332; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg);
+            max-width: 920px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.6; }
+    a { color: var(--accent); }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: .5rem; }
+    h2 { margin-top: 2rem; color: #93c5fd; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #334155; padding: .5rem .75rem; text-align: left; }
+    th { background: var(--card); }
+    pre.code { background: var(--card); padding: 1rem; overflow-x: auto; border-radius: 8px;
+                 font-size: .9rem; border: 1px solid #334155; }
+    nav.docs { background: var(--card); padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
+    nav.docs a { margin-right: 1rem; }
+    .badge { display: inline-block; background: #166534; color: #bbf7d0; padding: .2rem .6rem;
+              border-radius: 4px; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <nav class="docs">
+<a href="../index.html">Docs home</a>
+<a href="../SETUP.html">Setup</a>
+<a href="../USAGE.html">Usage</a>
+<a href="FULL_TEST_REPORT.html">Tests</a>
+<a href="STRESS_REPORT.html">Stress</a>
+<a href="VALGRIND_REPORT.html">Valgrind</a>
+</nav>
+  <h1>How to use NanoServe</h1>
+<br/>
+<p>After [SETUP.md](SETUP.md) or <code>./install.sh</code>, activate the environment:</p>
+<br/>
+<pre class="code"><code class="bash">
+source .venv/bin/activate &amp;&amp; source .env.nanoserve
+</pre>
+<br/>
+<h2>Start the server</h2>
+<br/>
+<table>
+<tr><th>Mode</th><th>Command</th><th>Users</th></tr>
+<tr><td>Dev</td><td>`./scripts/run_native.sh`</td><td>~50–150</td></tr>
+<tr><td>Production</td><td>`./scripts/run_native_300.sh`</td><td>~300</td></tr>
+<tr><td>Docker CPU</td><td>`docker compose up --build`</td><td>demo</td></tr>
+<tr><td>Docker GPU</td><td>`docker compose --profile gpu up --build`</td><td>demo + GPU</td></tr>
+</table>
+<br/>
+<p>Open <strong>http://localhost:8000</strong> for the Web UI.</p>
+<br/>
+<h2>Web UI</h2>
+<br/>
+<p>1. Enter a prompt in the text box.</p>
+<p>2. Choose <strong>Compute Engine</strong>: CPU, GPU, or Auto.</p>
+<p>3. Click <strong>Generate</strong> — response shows tokens and which device ran.</p>
+<br/>
+<h2>HTTP API</h2>
+<br/>
+<pre class="code"><code class="bash">
+curl -s http://localhost:8000/health | jq .
+
+curl -X POST http://localhost:8000/v1/completions \
+  -H &#x27;Content-Type: application/json&#x27; \
+  -d &#x27;{&quot;prompt&quot;:&quot;Explain quantum dots in one sentence.&quot;,&quot;max_tokens&quot;:48,&quot;device&quot;:&quot;auto&quot;}&#x27;
+</pre>
+<br/>
+<p>Fields:</p>
+<br/>
+<p>- <code>prompt</code> — input text</p>
+<p>- <code>max_tokens</code> — max generated tokens (default 64)</p>
+<p>- <code>device</code> — <code>cpu</code>, <code>gpu</code>, or <code>auto</code> (GPU falls back to CPU with warnings)</p>
+<br/>
+<h2>Python SDK</h2>
+<br/>
+<pre class="code"><code class="bash">
+pip install -e .
+python examples/sdk_demo.py
+</pre>
+<br/>
+<pre class="code"><code class="python">
+from nanoserve import NanoServe
+
+engine = NanoServe(device=&quot;auto&quot;)
+text = engine.generate(&quot;Hello from the SDK&quot;, max_tokens=32)
+print(text)
+</pre>
+<br/>
+<p>Async:</p>
+<br/>
+<pre class="code"><code class="python">
+import asyncio
+from nanoserve import NanoServe
+
+async def main():
+    engine = NanoServe(device=&quot;cpu&quot;)
+    text = await engine.generate_async(&quot;Async hello&quot;, max_tokens=24)
+    print(text)
+
+asyncio.run(main())
+</pre>
+<br/>
+<h2>Terminal UI (TUI)</h2>
+<br/>
+<pre class="code"><code class="bash">
+pip install httpx rich
+python tui/client.py --url http://localhost:8000 --device auto
+</pre>
+<br/>
+<p>Slash commands in the TUI:</p>
+<br/>
+<p>- <code>/device cpu|gpu|auto</code> — switch backend</p>
+<p>- <code>/quit</code> — exit</p>
+<br/>
+<h2>Load testing</h2>
+<br/>
+<pre class="code"><code class="bash">
+# 50 / 150 / 300 concurrent users (server must be running)
+python3 tests/load_test_report.py --preset 50
+python3 tests/load_test_report.py --preset 150
+python3 tests/load_test_report.py --preset 300
+</pre>
+<br/>
+<h2>Device selection summary</h2>
+<br/>
+<table>
+<tr><th>Client</th><th>How</th></tr>
+<tr><td>Web UI</td><td>Dropdown</td></tr>
+<tr><td>API</td><td>JSON `&quot;device&quot;`</td></tr>
+<tr><td>SDK</td><td>`NanoServe(device=&quot;...&quot;)`</td></tr>
+<tr><td>TUI</td><td>`--device` flag or `/device`</td></tr>
+</table>
+<br/>
+<h2>Troubleshooting</h2>
+<br/>
+<table>
+<tr><th>Issue</th><th>Fix</th></tr>
+<tr><td>`503 queue full`</td><td>Raise `NANOSERVE_MAX_QUEUE` or add gunicorn workers</td></tr>
+<tr><td>Slow at 300 users</td><td>Use `./scripts/run_native_300.sh`, not single uvicorn</td></tr>
+<tr><td>GPU warning, CPU used</td><td>Expected without CUDA/OpenCL build</td></tr>
+<tr><td>`libnanoserve_engine.so` not found</td><td>`source .env.nanoserve`</td></tr>
+</table>
+<br/>
+<p>Reports: [reports/FULL_TEST_REPORT.md](reports/FULL_TEST_REPORT.md), [reports/STRESS_REPORT.md](reports/STRESS_REPORT.md), [reports/VALGRIND_REPORT.md](reports/VALGRIND_REPORT.md).</p>
+  <footer><p style="color:var(--muted);font-size:.85rem;margin-top:3rem">
+    Generated 2026-07-25 17:15 UTC — NanoServe documentation
+  </p></footer>
+</body>
+</html>

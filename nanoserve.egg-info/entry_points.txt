@@ -1,0 +1,2 @@
+[console_scripts]
+nanoserve-quantizer = nanoserve.quantizer.quantize:main

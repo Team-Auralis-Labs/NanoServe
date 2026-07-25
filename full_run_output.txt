@@ -1,0 +1,61 @@
+=== BUILD ===
+-- The CXX compiler identification is GNU 15.2.0
+-- The CUDA compiler identification is NVIDIA 11.2.67
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found CUDAToolkit: /usr/lib/cuda/include (found version "11.2.67") 
+-- Looking for C++ include pthread.h
+-- Looking for C++ include pthread.h - found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/anand/AURALIS_LABS/LLMOrchestrator/NanoServe/engine/build
+CMAKE_EXIT=0
+[ 57%] Building CXX object CMakeFiles/nanoserve_engine.dir/src/backend_factory.cpp.o
+[ 57%] Building CXX object CMakeFiles/nanoserve_engine.dir/src/backend_cpu.cpp.o
+[ 57%] Building CXX object CMakeFiles/nanoserve_engine.dir/src/engine_core.cpp.o
+[ 57%] Building CXX object CMakeFiles/nanoserve_engine.dir/src/engine_ffi.cpp.o
+[ 71%] Building CUDA object CMakeFiles/nanoserve_engine.dir/src/backend_cuda.cu.o
+[ 85%] Building CXX object CMakeFiles/nanoserve_engine.dir/src/backend_opencl_stub.cpp.o
+[100%] Linking CXX shared library libnanoserve_engine.so
+[100%] Built target nanoserve_engine
+BUILD_EXIT_CODE=0
+=== LIB CHECK ===
+-rwxrwxr-x 1 anand anand 41448 Jul 25 22:16 libnanoserve_engine.so
+LIB_PRODUCED=yes
+=== PYTHON PROBE ===
+cuda probe True
+cpu 'allocator and for tokens quantized parallel serves buddy qua'
+gpu 'allocator and for tokens quantized parallel serves buddy qua'
+parity True
+=== TEST SUITE (last 25 lines) ===
+test_cpu_cuda_output_parity (__main__.TestEngineFFI)
+CPU vs CUDA must produce identical token stream when CUDA is compiled + available. ... ok
+test_cpu_infer_deterministic (__main__.TestEngineFFI) ... ok
+test_probes (__main__.TestEngineFFI) ... ok
+test_cpu_submit (__main__.TestEnginePool) ... ok
+test_gpu_fallback_simulated (__main__.TestEnginePool) ... ok
+test_generate_devices (__main__.TestNanoServeSDK) ... ok
+test_completions_cpu (__main__.TestHTTPServer) ... ok
+test_completions_gpu_or_fallback (__main__.TestHTTPServer) ... ok
+test_health (__main__.TestHTTPServer) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 1.257s
+
+OK
+
+=== SUMMARY ===
+{
+  "tests_run": 11,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "passed": 11,
+  "success": true
+}

@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  nanoserve:
+    build:
+      context: .
+      target: runtime-cpu
+    ports:
+      - "8000:8000"
+    environment:
+      - NANOSERVE_ENGINE_LIB=/opt/nanoserve/lib/libnanoserve_engine.so
+      - LD_LIBRARY_PATH=/opt/nanoserve/lib
+
+  nanoserve-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      target: runtime-gpu
+    ports:
+      - "8001:8000"
+    environment:
+      - NANOSERVE_ENGINE_LIB=/opt/nanoserve/lib/libnanoserve_engine.so
+      - LD_LIBRARY_PATH=/opt/nanoserve/lib
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

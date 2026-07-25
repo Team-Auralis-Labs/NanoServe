@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Non-Docker deployment — prior requirements — NanoServe</title>
+  <style>
+    :root { --bg:#0f1419; --fg:#e7ecf1; --accent:#3b82f6; --muted:#94a3b8; --card:#1a2332; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg);
+            max-width: 920px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.6; }
+    a { color: var(--accent); }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: .5rem; }
+    h2 { margin-top: 2rem; color: #93c5fd; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #334155; padding: .5rem .75rem; text-align: left; }
+    th { background: var(--card); }
+    pre.code { background: var(--card); padding: 1rem; overflow-x: auto; border-radius: 8px;
+                 font-size: .9rem; border: 1px solid #334155; }
+    nav.docs { background: var(--card); padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
+    nav.docs a { margin-right: 1rem; }
+    .badge { display: inline-block; background: #166534; color: #bbf7d0; padding: .2rem .6rem;
+              border-radius: 4px; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <nav class="docs">
+<a href="../index.html">Docs home</a>
+<a href="../SETUP.html">Setup</a>
+<a href="../USAGE.html">Usage</a>
+<a href="FULL_TEST_REPORT.html">Tests</a>
+<a href="STRESS_REPORT.html">Stress</a>
+<a href="VALGRIND_REPORT.html">Valgrind</a>
+</nav>
+  <h1>Non-Docker deployment — prior requirements</h1>
+<br/>
+<p>Install these <strong>before</strong> running <code>./install.sh</code>. The installer can install some packages on Debian/Ubuntu via <code>apt-get</code>; other distros need manual setup.</p>
+<br/>
+<h2>Required (all deployments)</h2>
+<br/>
+<table>
+<tr><th>Requirement</th><th>Minimum</th><th>Verify</th></tr>
+<tr><td>**OS**</td><td>Linux x86_64 (Pop!\_OS, Ubuntu 20.04+, Debian 11+)</td><td>`uname -m` → `x86_64`</td></tr>
+<tr><td>**RAM**</td><td>8 GB (16 GB for 150+ users, 32 GB for 300 users)</td><td>`free -h`</td></tr>
+<tr><td>**CPU**</td><td>4+ cores (8+ for 300-user production)</td><td>`nproc`</td></tr>
+<tr><td>**Disk**</td><td>~2 GB free (build + venv)</td><td>`df -h .`</td></tr>
+<tr><td>**build-essential**</td><td>gcc/g++, make</td><td>`gcc --version`</td></tr>
+<tr><td>**cmake**</td><td>3.16+</td><td>`cmake --version`</td></tr>
+<tr><td>**python3**</td><td>3.10+</td><td>`python3 --version`</td></tr>
+<tr><td>**python3-venv, pip**</td><td>stdlib venv</td><td>`python3 -m venv --help`</td></tr>
+<tr><td>**curl**</td><td>for Rust bootstrap</td><td>`curl --version`</td></tr>
+<tr><td>**Rust (cargo)**</td><td>1.70+</td><td>`cargo --version` (installer adds if missing)</td></tr>
+</table>
+<br/>
+<p>Debian/Ubuntu one-liner:</p>
+<br/>
+<pre class="code"><code class="bash">
+sudo apt-get update &amp;&amp; sudo apt-get install -y \
+  build-essential cmake curl python3 python3-pip python3-venv git
+</pre>
+<br/>
+<h2>Required for 150–300 user production (non-Docker)</h2>
+<br/>
+<table>
+<tr><th>Requirement</th><th>Purpose</th></tr>
+<tr><td>**gunicorn**</td><td>Multi-process HTTP (`pip install gunicorn`, added by `serve_production.sh`)</td></tr>
+<tr><td>**nginx**</td><td>Load balancer on `:8000` → gunicorn workers on `:8001–8004`</td></tr>
+<tr><td>**ulimit**</td><td>`nofile` ≥ 65535 recommended (`ulimit -n`)</td></tr>
+</table>
+<br/>
+<pre class="code"><code class="bash">
+sudo apt-get install -y nginx
+</pre>
+<br/>
+<p>Use <code>./scripts/run_native_300.sh</code> after install — it sets worker counts and starts nginx + gunicorn.</p>
+<br/>
+<h2>Optional — GPU backends</h2>
+<br/>
+<table>
+<tr><th>Backend</th><th>Requirements</th></tr>
+<tr><td>**CUDA**</td><td>NVIDIA driver, CUDA 11.x toolkit, `g++-9` (see `engine/nvcc_wrapper.sh`)</td></tr>
+<tr><td>**OpenCL**</td><td>`ocl-icd-opencl-dev`, `opencl-headers`, GPU ICD</td></tr>
+</table>
+<br/>
+<pre class="code"><code class="bash">
+ENABLE_CUDA=1 ./install.sh
+ENABLE_OPENCL=1 ./install.sh
+</pre>
+<br/>
+<h2>Optional — testing &amp; profiling</h2>
+<br/>
+<table>
+<tr><th>Tool</th><th>Purpose</th></tr>
+<tr><td>**valgrind**</td><td>C engine memory audit (`./scripts/valgrind.sh`)</td></tr>
+<tr><td>**httpx, rich**</td><td>TUI client (`pip install httpx rich`)</td></tr>
+</table>
+<br/>
+<pre class="code"><code class="bash">
+sudo apt-get install -y valgrind
+</pre>
+<br/>
+<h2>Scaling tiers (non-Docker)</h2>
+<br/>
+<table>
+<tr><th>Tier</th><th>Script</th><th>nginx</th><th>Engine workers</th></tr>
+<tr><td>Dev / demo</td><td>`./scripts/run_native.sh`</td><td>No</td><td>`nproc` (single process)</td></tr>
+<tr><td>~150 users</td><td>`./scripts/run_native.sh` + tune env</td><td>Optional</td><td>`NANOSERVE_NUM_WORKERS=$(nproc)`</td></tr>
+<tr><td>**300 users**</td><td>**`./scripts/run_native_300.sh`**</td><td>**Yes**</td><td>**`nproc / 4` per gunicorn process × 4 processes**</td></tr>
+</table>
+<br/>
+<p>Environment (written by <code>install.sh</code> to <code>.env.nanoserve</code>):</p>
+<br/>
+<pre class="code"><code class="bash">
+export NANOSERVE_NUM_WORKERS=&quot;$(nproc)&quot;      # overridden by run_native_300.sh
+export NANOSERVE_MAX_BATCH=&quot;32&quot;
+export NANOSERVE_MAX_QUEUE=&quot;512&quot;
+export LD_LIBRARY_PATH=&quot;$PWD/allocator/target/release:$LD_LIBRARY_PATH&quot;
+export NANOSERVE_ENGINE_LIB=&quot;$PWD/engine/build/libnanoserve_engine.so&quot;
+export PYTHONPATH=&quot;$PWD:$PYTHONPATH&quot;
+</pre>
+<br/>
+<h2>Network</h2>
+<br/>
+<p>- Port <strong>8000</strong> — HTTP API + Web UI (nginx in production mode)</p>
+<p>- Ports <strong>8001–8004</strong> — internal gunicorn (production only)</p>
+<br/>
+<h2>What the installer does not provide</h2>
+<br/>
+<p>- Docker / container runtime</p>
+<p>- NVIDIA Container Toolkit (Docker GPU only)</p>
+<p>- Systemd unit files (add your own for production)</p>
+<p>- TLS certificates (terminate TLS at nginx or a reverse proxy)</p>
+<br/>
+<p>See [SETUP.md](SETUP.md) and [USAGE.md](USAGE.md) for step-by-step setup and daily use.</p>
+  <footer><p style="color:var(--muted);font-size:.85rem;margin-top:3rem">
+    Generated 2026-07-25 17:15 UTC — NanoServe documentation
+  </p></footer>
+</body>
+</html>

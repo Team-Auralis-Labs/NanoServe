@@ -1,0 +1,140 @@
+Metadata-Version: 2.4
+Name: nanoserve
+Version: 0.3.0
+Summary: Minimal LLM orchestrator with CPU/GPU compute backends
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.26
+Provides-Extra: server
+Requires-Dist: fastapi>=0.110; extra == "server"
+Requires-Dist: uvicorn[standard]>=0.27; extra == "server"
+Requires-Dist: httpx>=0.27; extra == "server"
+Requires-Dist: rich>=13.7; extra == "server"
+
+# NanoServe
+
+A minimal, from-scratch vLLM-style orchestrator: Rust buddy allocator +
+C++23 quantized inference engine (AVX2 CPU + optional CUDA/OpenCL GPU) +
+async Python FastAPI orchestrator, installable Python SDK, web UI, and TUI.
+
+```mermaid
+flowchart LR
+  subgraph clients [Clients]
+    SDK["Python SDK"]
+    Web["Web UI"]
+    TUI["TUI"]
+  end
+  API["FastAPI /v1/completions"]
+  Pool["EnginePool"]
+  CPU["CPUSimdBackend"]
+  GPU["CUDA / OpenCL"]
+  clients --> API
+  SDK --> Pool
+  API --> Pool
+  Pool --> CPU
+  Pool --> GPU
+```
+
+## Quick start (Docker — CPU)
+
+```bash
+docker compose up --build
+```
+
+Open http://localhost:8000 — use the **Compute Engine** dropdown (CPU / GPU / Auto).
+
+## Quick start (Docker — GPU profile)
+
+```bash
+docker compose --profile gpu up --build
+```
+
+GPU service: http://localhost:8001 (requires NVIDIA Container Toolkit).
+
+## Quick start (local dev)
+
+```bash
+cd allocator && cargo build --release && cd ..
+cd engine && mkdir -p build && cd build && cmake .. && make && cd ../..
+pip install -e ".[server]"
+export LD_LIBRARY_PATH=$(pwd)/allocator/target/release:$LD_LIBRARY_PATH
+export NANOSERVE_ENGINE_LIB=$(pwd)/engine/build/libnanoserve_engine.so
+python server/main.py
+```
+
+## Python SDK
+
+```bash
+pip install -e .
+python examples/sdk_demo.py
+```
+
+```python
+from nanoserve import NanoServe, Quantizer
+import numpy as np
+
+q, scales = Quantizer.quantize_int8(np.random.randn(256, 1024).astype(np.float32))
+engine = NanoServe(device="auto")
+print(engine.generate("Hello world", max_tokens=50))
+```
+
+## API
+
+```bash
+curl -X POST http://localhost:8000/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Hello","max_tokens":24,"device":"cpu"}'
+```
+
+Response includes `device` (actual backend) and `warnings` (e.g. GPU fallback).
+
+## Terminal client
+
+```bash
+pip install httpx rich
+python tui/client.py --device auto
+# in REPL: /device gpu
+python tui/load_test.py --users 50 --device cpu
+```
+
+## Build options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `NANOSERVE_ENABLE_CUDA` | OFF | CUDA dot-product backend |
+| `NANOSERVE_ENABLE_OPENCL` | OFF | OpenCL dot-product backend |
+
+```bash
+cd engine/build
+cmake .. -DNANOSERVE_ENABLE_CUDA=ON -DNANOSERVE_ENABLE_OPENCL=ON
+make
+```
+
+## Layout
+
+```
+allocator/     Rust buddy-tier memory allocator (cdylib)
+engine/        C++23 inference engine with backend abstraction
+nanoserve/     Python SDK (NanoServe, Quantizer, EnginePool)
+server/        FastAPI orchestrator + static web UI
+tui/           Terminal chat client + load tester
+examples/      SDK demo script
+documentation/ Setup, usage, and testing guides
+```
+
+## Verification checklist
+
+1. `pip install -e .` — `from nanoserve import NanoServe, Quantizer` works
+2. `python -m nanoserve.quantizer --out /tmp/test.nanoq`
+3. `python examples/sdk_demo.py`
+4. `curl` with `"device":"gpu"` on CPU-only host → 200, `"device":"cpu"`, warning present
+5. `GET /health` reports `gpu_cuda`, `gpu_opencl`, `gpu_available`
+
+See [documentation/SETUP.md](documentation/SETUP.md) for full setup, usage, and testing guide.
+
+## Design notes
+
+- **Backward-compatible FFI:** `engine_init()`, `engine_infer()`, `engine_cleanup()` unchanged (CPU path).
+- **Device routing:** `device=cpu|gpu|auto` on API, SDK, Web UI, and TUI.
+- **GPU fallback:** Graceful CPU fallback with warnings when GPU unavailable.
+- **Lean runtime:** Multi-stage Docker copies only `.so` artifacts + Python wheel.

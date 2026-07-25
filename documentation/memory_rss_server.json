@@ -1,0 +1,26 @@
+{
+  "samples": [
+    {
+      "round": 1,
+      "requests": 50,
+      "ok": 50,
+      "rss_mb": 65.9296875,
+      "elapsed_s": 0.08
+    },
+    {
+      "round": 2,
+      "requests": 30,
+      "ok": 30,
+      "rss_mb": 66.06640625,
+      "elapsed_s": 0.05
+    },
+    {
+      "round": 3,
+      "requests": 30,
+      "ok": 30,
+      "rss_mb": 66.23828125,
+      "elapsed_s": 0.04
+    }
+  ],
+  "growth_mb": 0.30859375
+}

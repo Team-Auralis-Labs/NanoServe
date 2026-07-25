@@ -1,0 +1,26 @@
+-- The CXX compiler identification is GNU 15.2.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- The CUDA compiler identification is unknown
+-- Detecting CUDA compiler ABI info
+CMake Error in /home/anand/AURALIS_LABS/LLMOrchestrator/NanoServe/engine/build/CMakeFiles/CMakeTmp/CMakeLists.txt:
+  CUDA_ARCHITECTURES is empty for target "cmTC_72046".
+
+
+CMake Error in /home/anand/AURALIS_LABS/LLMOrchestrator/NanoServe/engine/build/CMakeFiles/CMakeTmp/CMakeLists.txt:
+  CUDA_ARCHITECTURES is empty for target "cmTC_72046".
+
+
+CMake Error at /usr/share/cmake-3.22/Modules/CMakeDetermineCompilerABI.cmake:49 (try_compile):
+  Failed to generate test project build system.
+Call Stack (most recent call first):
+  /usr/share/cmake-3.22/Modules/CMakeTestCUDACompiler.cmake:19 (CMAKE_DETERMINE_COMPILER_ABI)
+  CMakeLists.txt:20 (enable_language)
+
+
+-- Configuring incomplete, errors occurred!
+See also "/home/anand/AURALIS_LABS/LLMOrchestrator/NanoServe/engine/build/CMakeFiles/CMakeOutput.log".
+See also "/home/anand/AURALIS_LABS/LLMOrchestrator/NanoServe/engine/build/CMakeFiles/CMakeError.log".

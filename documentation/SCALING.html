@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>NanoServe Scaling Guide (150–300+ users) — NanoServe</title>
+  <style>
+    :root { --bg:#0f1419; --fg:#e7ecf1; --accent:#3b82f6; --muted:#94a3b8; --card:#1a2332; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg);
+            max-width: 920px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.6; }
+    a { color: var(--accent); }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: .5rem; }
+    h2 { margin-top: 2rem; color: #93c5fd; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #334155; padding: .5rem .75rem; text-align: left; }
+    th { background: var(--card); }
+    pre.code { background: var(--card); padding: 1rem; overflow-x: auto; border-radius: 8px;
+                 font-size: .9rem; border: 1px solid #334155; }
+    nav.docs { background: var(--card); padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
+    nav.docs a { margin-right: 1rem; }
+    .badge { display: inline-block; background: #166534; color: #bbf7d0; padding: .2rem .6rem;
+              border-radius: 4px; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <nav class="docs">
+<a href="../index.html">Docs home</a>
+<a href="../SETUP.html">Setup</a>
+<a href="../USAGE.html">Usage</a>
+<a href="FULL_TEST_REPORT.html">Tests</a>
+<a href="STRESS_REPORT.html">Stress</a>
+<a href="VALGRIND_REPORT.html">Valgrind</a>
+</nav>
+  <h1>NanoServe Scaling Guide (150–300+ users)</h1>
+<br/>
+<p>Non-Docker scaling uses the same FastAPI micro-batcher; throughput comes from <strong>engine worker threads</strong> and, at 300 users, <strong>multiple gunicorn processes behind nginx</strong>.</p>
+<br/>
+<h2>Tiers</h2>
+<br/>
+<table>
+<tr><th>Tier</th><th>Concurrent users</th><th>Script</th><th>nginx</th></tr>
+<tr><td>Dev</td><td>≤50</td><td>`./scripts/run_native.sh`</td><td>No</td></tr>
+<tr><td>Production</td><td>150</td><td>`./scripts/run_native.sh`</td><td>Optional</td></tr>
+<tr><td>**High load**</td><td>**300**</td><td>**`./scripts/run_native_300.sh`**</td><td>**Yes**</td></tr>
+</table>
+<br/>
+<p>Prior requirements for non-Docker production: [REQUIREMENTS.md](REQUIREMENTS.md).</p>
+<br/>
+<h2>Environment variables</h2>
+<br/>
+<table>
+<tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+<tr><td>`NANOSERVE_NUM_WORKERS`</td><td>`nproc` (dev) or `nproc/4` (300 prod)</td><td>Engine threads **per process**</td></tr>
+<tr><td>`NANOSERVE_MAX_BATCH`</td><td>32</td><td>Micro-batch size</td></tr>
+<tr><td>`NANOSERVE_BATCH_WINDOW_S`</td><td>0.025</td><td>Batch collect window</td></tr>
+<tr><td>`NANOSERVE_MAX_QUEUE`</td><td>512 (256 in dev)</td><td>HTTP 503 when exceeded</td></tr>
+<tr><td>`NANOSERVE_UVICORN_WORKERS`</td><td>4</td><td>Gunicorn processes (`run_native_300.sh`)</td></tr>
+</table>
+<br/>
+<p><code>install.sh</code> writes defaults to <code>.env.nanoserve</code>. <strong><code>run_native_300.sh</code> overrides worker counts</strong> for correct 300-user production.</p>
+<br/>
+<h2>Stage 1 — 150 users (single node)</h2>
+<br/>
+<pre class="code"><code class="bash">
+source .venv/bin/activate &amp;&amp; source .env.nanoserve
+./scripts/run_native.sh
+
+python3 tests/load_test_report.py --preset 150 --device cpu
+</pre>
+<br/>
+<h2>Stage 2 — 300 users (non-Docker production)</h2>
+<br/>
+<pre class="code"><code class="bash">
+source .venv/bin/activate &amp;&amp; source .env.nanoserve
+chmod +x scripts/run_native_300.sh scripts/serve_production.sh
+./scripts/run_native_300.sh
+# nginx :8000 → gunicorn :8001-8004, each with nproc/4 engine workers
+
+python3 tests/load_test_report.py --preset 300 --device cpu --url http://127.0.0.1:8000
+</pre>
+<br/>
+<p>Requires <strong>nginx</strong> (<code>sudo apt-get install nginx</code>) and <strong>gunicorn</strong> (installed by production script).</p>
+<br/>
+<p>Manual equivalent:</p>
+<br/>
+<pre class="code"><code class="bash">
+export NANOSERVE_UVICORN_WORKERS=4
+export NANOSERVE_NUM_WORKERS=$(($(nproc) / 4))
+export NANOSERVE_MAX_QUEUE=512
+./scripts/serve_production.sh
+</pre>
+<br/>
+<h2>Verified results (CPU, native)</h2>
+<br/>
+<table>
+<tr><th>Preset</th><th>Success</th><th>Throughput</th><th>p95 latency</th></tr>
+<tr><td>50</td><td>100%</td><td>~62 req/s</td><td>~800 ms</td></tr>
+<tr><td>150</td><td>100%</td><td>~60 req/s</td><td>~2373 ms</td></tr>
+<tr><td>300</td><td>100%</td><td>~64 req/s</td><td>~4508 ms</td></tr>
+</table>
+<br/>
+<p>Details: [reports/STRESS_REPORT.md](reports/STRESS_REPORT.md).</p>
+<br/>
+<h2>Memory validation (Valgrind)</h2>
+<br/>
+<pre class="code"><code class="bash">
+./scripts/valgrind.sh
+</pre>
+<br/>
+<p>Report: [reports/VALGRIND_REPORT.md](reports/VALGRIND_REPORT.md).</p>
+<br/>
+<h2>Docker</h2>
+<br/>
+<p>Scale replicas in <code>docker-compose.yml</code> with nginx fronting multiple <code>nanoserve</code> containers (same pattern as native 300-user tier).</p>
+  <footer><p style="color:var(--muted);font-size:.85rem;margin-top:3rem">
+    Generated 2026-07-25 17:15 UTC — NanoServe documentation
+  </p></footer>
+</body>
+</html>

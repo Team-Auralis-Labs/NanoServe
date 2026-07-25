@@ -1,0 +1,127 @@
+"""Thread pool with CPU and GPU worker routing."""
+from __future__ import annotations
+
+import logging
+import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from typing import Literal
+
+from nanoserve.engine.worker import BackendKind, EngineWorker, InferResult
+
+logger = logging.getLogger(__name__)
+
+DeviceLiteral = Literal["cpu", "gpu", "auto"]
+
+
+@dataclass
+class _GpuState:
+    cuda: bool
+    opencl: bool
+    backend: BackendKind | None
+    backend_name: str
+
+    @property
+    def available(self) -> bool:
+        return self.cuda or self.opencl
+
+
+class EnginePool:
+    """Fixed-size pools for CPU and optional GPU backends."""
+
+    def __init__(
+        self,
+        num_workers: int = 4,
+        gpu_workers: int | None = None,
+        lib_path: str | None = None,
+    ):
+        self.lib_path = lib_path
+        self.gpu_workers = gpu_workers or int(os.environ.get("NANOSERVE_GPU_WORKERS", "1"))
+        self._gpu_state = self._detect_gpu()
+        self.cpu_executor = ThreadPoolExecutor(
+            max_workers=num_workers, thread_name_prefix="engine-cpu"
+        )
+        self.gpu_executor = (
+            ThreadPoolExecutor(max_workers=self.gpu_workers, thread_name_prefix="engine-gpu")
+            if self._gpu_state.available
+            else None
+        )
+        self._cpu_local = threading.local()
+        self._gpu_local = threading.local()
+
+    def _detect_gpu(self) -> _GpuState:
+        cuda = EngineWorker.probe_cuda(self.lib_path)
+        ocl = EngineWorker.probe_opencl(self.lib_path)
+        if cuda:
+            return _GpuState(True, ocl, BackendKind.CUDA, "cuda")
+        if ocl:
+            return _GpuState(False, True, BackendKind.OPENCL, "opencl")
+        return _GpuState(False, False, None, "cpu")
+
+    @property
+    def gpu_cuda_available(self) -> bool:
+        return self._gpu_state.cuda
+
+    @property
+    def gpu_opencl_available(self) -> bool:
+        return self._gpu_state.opencl
+
+    @property
+    def gpu_available(self) -> bool:
+        return self._gpu_state.available
+
+    def _cpu_infer(self, prompt: str, max_tokens: int) -> InferResult:
+        if not hasattr(self._cpu_local, "worker"):
+            self._cpu_local.worker = EngineWorker(self.lib_path, BackendKind.CPU)
+        text = self._cpu_local.worker.infer(prompt, max_tokens)
+        return InferResult(text=text, device="cpu", warnings=[])
+
+    def _gpu_infer(self, prompt: str, max_tokens: int) -> InferResult:
+        if not hasattr(self._gpu_local, "worker"):
+            if not self._gpu_state.backend:
+                raise RuntimeError("GPU backend unavailable")
+            self._gpu_local.worker = EngineWorker(self.lib_path, self._gpu_state.backend)
+        text = self._gpu_local.worker.infer(prompt, max_tokens)
+        return InferResult(text=text, device=self._gpu_state.backend_name, warnings=[])
+
+    def _resolve_device(self, device: DeviceLiteral) -> tuple[str, list[str]]:
+        if device == "cpu":
+            return "cpu", []
+        if device == "gpu":
+            if self._gpu_state.available:
+                return self._gpu_state.backend_name, []
+            return "cpu", ["GPU requested but unavailable; fell back to CPU"]
+        # auto
+        if self._gpu_state.available:
+            return self._gpu_state.backend_name, []
+        logger.debug("auto device: no GPU backend, using CPU")
+        return "cpu", []
+
+    def submit(self, prompt: str, max_tokens: int, device: DeviceLiteral = "cpu"):
+        target, warnings = self._resolve_device(device)
+        use_gpu = target in ("cuda", "opencl")
+
+        if use_gpu and self.gpu_executor:
+            fut = self.gpu_executor.submit(self._gpu_infer, prompt, max_tokens)
+
+            def wrapped():
+                try:
+                    result = fut.result()
+                    if warnings:
+                        result.warnings.extend(warnings)
+                    return result
+                except Exception:
+                    cpu_result = self._cpu_infer(prompt, max_tokens)
+                    cpu_result.warnings.append("GPU execution failed; fell back to CPU")
+                    cpu_result.warnings.extend(warnings)
+                    return cpu_result
+
+            return self.cpu_executor.submit(wrapped)
+
+        def cpu_wrapped():
+            result = self._cpu_infer(prompt, max_tokens)
+            result.warnings.extend(warnings)
+            return result
+
+        return self.cpu_executor.submit(cpu_wrapped)

@@ -1,0 +1,35 @@
+=== ls -la engine/build/libnanoserve_engine.so ===
+ls: cannot access 'engine/build/libnanoserve_engine.so': No such file or directory
+=== probe ===
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/home/anand/AURALIS_LABS/LLMOrchestrator/NanoServe/nanoserve/engine/worker.py", line 61, in probe_cuda
+    w = cls(lib_path=lib_path)
+  File "/home/anand/AURALIS_LABS/LLMOrchestrator/NanoServe/nanoserve/engine/worker.py", line 40, in __init__
+    self.lib = ctypes.CDLL(path)
+  File "/usr/local/lib/python3.9/ctypes/__init__.py", line 374, in __init__
+    self._handle = _dlopen(self._name, mode)
+OSError: /home/anand/AURALIS_LABS/LLMOrchestrator/NanoServe/engine/build/libnanoserve_engine.so: cannot open shared object file: No such file or directory
+=== test_suite ===
+test_quantize_int8_shape (__main__.TestQuantizer) ... ok
+test_write_nanoq (__main__.TestQuantizer) ... ok
+skipped 'Engine lib not built: /home/anand/AURALIS_LABS/LLMOrchestrator/NanoServe/engine/build/libnanoserve_engine.so'
+test_cpu_submit (__main__.TestEnginePool) ... skipped 'Engine not built'
+test_gpu_fallback_simulated (__main__.TestEnginePool) ... skipped 'Engine not built'
+test_generate_devices (__main__.TestNanoServeSDK) ... skipped 'Engine not built'
+skipped 'Engine not built'
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.001s
+
+OK (skipped=5)
+
+=== SUMMARY ===
+{
+  "tests_run": 5,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 5,
+  "passed": 5,
+  "success": true
+}

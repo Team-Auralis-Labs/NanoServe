@@ -1,0 +1,23 @@
+{
+  "rounds": [
+    {
+      "users": 150,
+      "device": "cpu",
+      "success": 150,
+      "failed": 0,
+      "success_rate_pct": 100.0,
+      "wall_clock_s": 2.5,
+      "throughput_rps": 60.0,
+      "latency_ms": {
+        "mean": 1401.14,
+        "p50": 1378.54,
+        "p95": 2372.53,
+        "p99": 2429.18,
+        "max": 2462.28,
+        "min": 324.09
+      },
+      "errors_sample": []
+    }
+  ],
+  "passed": true
+}

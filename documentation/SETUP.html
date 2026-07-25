@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>NanoServe — Setup &amp; Usage Guide — NanoServe</title>
+  <style>
+    :root { --bg:#0f1419; --fg:#e7ecf1; --accent:#3b82f6; --muted:#94a3b8; --card:#1a2332; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg);
+            max-width: 920px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.6; }
+    a { color: var(--accent); }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: .5rem; }
+    h2 { margin-top: 2rem; color: #93c5fd; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #334155; padding: .5rem .75rem; text-align: left; }
+    th { background: var(--card); }
+    pre.code { background: var(--card); padding: 1rem; overflow-x: auto; border-radius: 8px;
+                 font-size: .9rem; border: 1px solid #334155; }
+    nav.docs { background: var(--card); padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
+    nav.docs a { margin-right: 1rem; }
+    .badge { display: inline-block; background: #166534; color: #bbf7d0; padding: .2rem .6rem;
+              border-radius: 4px; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <nav class="docs">
+<a href="../index.html">Docs home</a>
+<a href="../SETUP.html">Setup</a>
+<a href="../USAGE.html">Usage</a>
+<a href="FULL_TEST_REPORT.html">Tests</a>
+<a href="STRESS_REPORT.html">Stress</a>
+<a href="VALGRIND_REPORT.html">Valgrind</a>
+</nav>
+  <h1>NanoServe — Setup &amp; Usage Guide</h1>
+<br/>
+<p>Complete guide for installing, running, and testing NanoServe in every mode.</p>
+<br/>
+<h2>Table of contents</h2>
+<br/>
+<p>1. [Platform status](#platform-status)</p>
+<p>2. [Naming](#naming)</p>
+<p>3. [Prerequisites](#prerequisites)</p>
+<p>4. [Native install (no Docker)](#native-install-no-docker)</p>
+<p>5. [Python SDK](#python-sdk)</p>
+<p>6. [HTTP server &amp; Web UI](#http-server--web-ui)</p>
+<p>7. [Terminal UI (TUI)](#terminal-ui-tui)</p>
+<p>8. [Device selection](#device-selection)</p>
+<p>9. [Docker deployment](#docker-deployment)</p>
+<p>10. [Building GPU backends](#building-gpu-backends)</p>
+<p>11. [C++23 engine](#c23-engine)</p>
+<p>12. [Testing](#testing)</p>
+<p>13. [Troubleshooting](#troubleshooting)</p>
+<br/>
+<hr/>
+<br/>
+<h2>Platform status</h2>
+<br/>
+<table>
+<tr><th>Component</th><th>Status</th><th>Notes</th></tr>
+<tr><td>**Web UI**</td><td>Working</td><td>http://localhost:8000 — prompt, max tokens, Compute Engine dropdown (CPU/GPU/Auto)</td></tr>
+<tr><td>**CUDA backend**</td><td>Working</td><td>INT8 GEMV kernel; verified on NVIDIA RTX 3060; CPU/CUDA output parity confirmed</td></tr>
+<tr><td>**OpenCL backend**</td><td>Optional</td><td>Code complete; requires `ocl-icd-opencl-dev` + `opencl-headers` at build time</td></tr>
+<tr><td>**CPU backend**</td><td>Working</td><td>AVX2 SIMD; default path, backward-compatible FFI</td></tr>
+<tr><td>**Python SDK**</td><td>Working</td><td>`pip install -e .` → `from nanoserve import NanoServe`</td></tr>
+<tr><td>**TUI**</td><td>Working</td><td>`--device` flag + `/device gpu` slash commands</td></tr>
+</table>
+<br/>
+<p>GPU priority at runtime: <strong>CUDA → OpenCL → CPU fallback</strong> (with warnings in API response).</p>
+<br/>
+<hr/>
+<br/>
+<h2>Naming</h2>
+<br/>
+<table>
+<tr><th>Context</th><th>Name</th></tr>
+<tr><td>GitHub / marketing</td><td>**NanoServe**</td></tr>
+<tr><td>Repo folder</td><td>`NanoServe`</td></tr>
+<tr><td>pip install</td><td>`pip install nanoserve` (PyPI lowercases)</td></tr>
+<tr><td>Python import</td><td>`from nanoserve import NanoServe`</td></tr>
+<tr><td>C++ shared lib</td><td>`libnanoserve_engine.so`</td></tr>
+</table>
+<br/>
+<hr/>
+<br/>
+<h2>Prerequisites</h2>
+<br/>
+<p><strong>Full checklist:</strong> [REQUIREMENTS.md](REQUIREMENTS.md) (non-Docker prior requirements).</p>
+<br/>
+<table>
+<tr><th>Component</th><th>Version</th><th>Required for</th></tr>
+<tr><td>Rust</td><td>stable</td><td>allocator build</td></tr>
+<tr><td>CMake</td><td>≥ 3.16</td><td>engine build</td></tr>
+<tr><td>GCC/Clang C++23</td><td>recent</td><td>engine build</td></tr>
+<tr><td>Python</td><td>≥ 3.10</td><td>SDK &amp; server</td></tr>
+<tr><td>nginx + gunicorn</td><td>latest</td><td>**300-user non-Docker production**</td></tr>
+<tr><td>CUDA Toolkit</td><td>11.x–12.x</td><td>CUDA backend (optional)</td></tr>
+<tr><td>OpenCL ICD</td><td>any</td><td>OpenCL backend (optional)</td></tr>
+<tr><td>Docker</td><td>20+</td><td>container deployment</td></tr>
+<tr><td>NVIDIA Container Toolkit</td><td>latest</td><td>GPU Docker profile</td></tr>
+<tr><td>valgrind</td><td>3.x</td><td>memory audit (optional)</td></tr>
+</table>
+<br/>
+<p>Debian/Ubuntu base:</p>
+<br/>
+<pre class="code"><code class="bash">
+sudo apt-get install -y build-essential cmake curl python3 python3-pip python3-venv git nginx
+</pre>
+<br/>
+<hr/>
+<br/>
+<h2>Native install (no Docker)</h2>
+<br/>
+<pre class="code"><code class="bash">
+git clone https://github.com/&lt;your-org&gt;/NanoServe.git &amp;&amp; cd NanoServe
+./install.sh                  # CPU — writes .env.nanoserve
+ENABLE_CUDA=1 ./install.sh    # + NVIDIA CUDA
+ENABLE_OPENCL=1 ./install.sh  # + OpenCL
+
+source .venv/bin/activate &amp;&amp; source .env.nanoserve
+./scripts/run_native.sh       # dev / ~150 users — http://localhost:8000
+./scripts/run_native_300.sh   # production / 300 users (nginx + gunicorn)
+</pre>
+<br/>
+<p>See [USAGE.md](USAGE.md) for Web UI, API, SDK, and TUI.  </p>
+<p>See [SCALING.md](SCALING.md) for env tuning.  </p>
+<p>Reports: [reports/FULL_TEST_REPORT.md](reports/FULL_TEST_REPORT.md).</p>
+<br/>
+<hr/>
+<br/>
+<h2>Python SDK</h2>
+<br/>
+<p>Install: <code>pip install -e .</code></p>
+<br/>
+<h3>Quantizer</h3>
+<br/>
+<pre class="code"><code class="python">
+from nanoserve import Quantizer
+import numpy as np
+
+weights = np.random.randn(256, 1024).astype(np.float32)
+q, scales = Quantizer.quantize_int8(weights)
+Quantizer.write_nanoq(&quot;model-int8.nanoq&quot;, q, scales, 256, 1024)
+</pre>
+<br/>
+<p>CLI:</p>
+<br/>
+<pre class="code"><code class="bash">
+python -m nanoserve.quantizer --rows 256 --cols 1024 --out model-int8.nanoq
+nanoserve-quantizer --out model-int8.nanoq
+</pre>
+<br/>
+<h3>In-process inference</h3>
+<br/>
+<pre class="code"><code class="python">
+from nanoserve import NanoServe
+
+engine = NanoServe(device=&quot;auto&quot;)
+text = engine.generate(&quot;Explain buddy allocators&quot;, max_tokens=32)
+print(text, engine.last_device, engine.last_warnings)
+
+# async
+import asyncio
+async def run():
+    engine = NanoServe(device=&quot;gpu&quot;)
+    return await engine.generate_async(&quot;Hello&quot;, max_tokens=16)
+asyncio.run(run())
+</pre>
+<br/>
+<p>Demo script: <code>python examples/sdk_demo.py</code></p>
+<br/>
+<hr/>
+<br/>
+<h2>HTTP server &amp; Web UI</h2>
+<br/>
+<p>The Web UI is a single-page app served at <code>/</code> by FastAPI. It is <strong>fully working</strong> in native and Docker installs.</p>
+<br/>
+<pre class="code"><code class="bash">
+python server/main.py
+# or: uvicorn server.main:app --host 0.0.0.0 --port 8000
+</pre>
+<br/>
+<p>- <strong>Web UI:</strong> http://localhost:8000 — textarea prompt, max tokens, <strong>Compute Engine</strong> dropdown (CPU / GPU / Auto)</p>
+<p>- <strong>Health:</strong> http://localhost:8000/health — reports <code>gpu_cuda</code>, <code>gpu_opencl</code>, <code>gpu_available</code></p>
+<p>- <strong>Completions:</strong> <code>POST /v1/completions</code></p>
+<br/>
+<p>Request body:</p>
+<br/>
+<pre class="code"><code class="json">
+{
+  &quot;prompt&quot;: &quot;Hello world&quot;,
+  &quot;max_tokens&quot;: 50,
+  &quot;device&quot;: &quot;cpu&quot;
+}
+</pre>
+<br/>
+<p><code>device</code> options: <code>&quot;cpu&quot;</code> (default), <code>&quot;gpu&quot;</code>, <code>&quot;auto&quot;</code>.</p>
+<br/>
+<hr/>
+<br/>
+<h2>Terminal UI (TUI)</h2>
+<br/>
+<pre class="code"><code class="bash">
+python tui/client.py http://127.0.0.1:8000 --device cpu
+</pre>
+<br/>
+<p>Interactive commands:</p>
+<br/>
+<table>
+<tr><th>Command</th><th>Action</th></tr>
+<tr><td>`/device gpu`</td><td>Switch to GPU</td></tr>
+<tr><td>`/device cpu`</td><td>Switch to CPU</td></tr>
+<tr><td>`/device auto`</td><td>Auto-select best backend</td></tr>
+<tr><td>`/help`</td><td>Show commands</td></tr>
+<tr><td>`exit`</td><td>Quit</td></tr>
+</table>
+<br/>
+<p>Load test:</p>
+<br/>
+<pre class="code"><code class="bash">
+python tui/load_test.py --users 50 --device auto
+</pre>
+<br/>
+<hr/>
+<br/>
+<h2>Device selection</h2>
+<br/>
+<pre class="code"><code class="mermaid">
+flowchart TD
+  req[Request device param] --&gt; cpu{device=cpu?}
+  cpu --&gt;|yes| runCPU[CPU AVX2 pool]
+  cpu --&gt;|no| gpu{device=gpu?}
+  gpu --&gt;|yes| tryGPU{CUDA or OpenCL available?}
+  tryGPU --&gt;|yes| runGPU[GPU pool]
+  tryGPU --&gt;|no| fallback[CPU + warning]
+  gpu --&gt;|no auto| autoGPU{GPU available?}
+  autoGPU --&gt;|yes| runGPU
+  autoGPU --&gt;|no| runCPU
+</pre>
+<br/>
+<p>Priority for GPU: <strong>CUDA → OpenCL → CPU fallback</strong>.</p>
+<br/>
+<hr/>
+<br/>
+<h2>Docker deployment</h2>
+<br/>
+<h3>CPU (default)</h3>
+<br/>
+<pre class="code"><code class="bash">
+docker compose up --build
+</pre>
+<br/>
+<h3>GPU profile</h3>
+<br/>
+<pre class="code"><code class="bash">
+docker compose --profile gpu up --build
+</pre>
+<br/>
+<table>
+<tr><th>Service</th><th>Port</th><th>Image target</th></tr>
+<tr><td>nanoserve</td><td>8000</td><td>runtime-cpu</td></tr>
+<tr><td>nanoserve-gpu</td><td>8001</td><td>runtime-gpu</td></tr>
+</table>
+<br/>
+<p>Runtime images contain only compiled <code>.so</code> files and the Python wheel — no CUDA dev toolkit in the final CPU layer.</p>
+<br/>
+<hr/>
+<br/>
+<h2>Building GPU backends</h2>
+<br/>
+<h3>CUDA</h3>
+<br/>
+<p>Requires NVIDIA driver + CUDA toolkit. Build with:</p>
+<br/>
+<pre class="code"><code class="bash">
+cd engine/build
+cmake .. -DNANOSERVE_ENABLE_CUDA=ON
+make -j$(nproc)
+</pre>
+<br/>
+<p><strong>Status:</strong> Verified working — tiled INT8 GEMV matmul kernel, buddy-allocator host buffers, CPU/CUDA parity on RTX 3060.</p>
+<br/>
+<p>CUDA 11.x + GCC 15 requires <code>engine/nvcc_wrapper.sh</code> and <code>g++-9</code> (configured in CMake when CUDA is enabled).</p>
+<br/>
+<h3>OpenCL</h3>
+<br/>
+<p>Requires dev headers at build time:</p>
+<br/>
+<pre class="code"><code class="bash">
+sudo apt-get install -y ocl-icd-opencl-dev opencl-headers
+cd engine/build
+cmake .. -DNANOSERVE_ENABLE_OPENCL=ON
+make -j$(nproc)
+</pre>
+<br/>
+<p><strong>Status:</strong> Implementation complete; enable when OpenCL ICD is installed. Falls back to CPU if unavailable.</p>
+<br/>
+<h3>Verify probes</h3>
+<br/>
+<pre class="code"><code class="python">
+from nanoserve.engine.worker import EngineWorker
+print(&quot;CUDA:&quot;, EngineWorker.probe_cuda())
+print(&quot;OpenCL:&quot;, EngineWorker.probe_opencl())
+</pre>
+<br/>
+<hr/>
+<br/>
+<h2>C++23 engine</h2>
+<br/>
+<p>The inference engine is built as <strong>C++23</strong> (<code>CMAKE_CXX_STANDARD 23</code> in <code>engine/CMakeLists.txt</code>).</p>
+<br/>
+<p>Modern features in use:</p>
+<br/>
+<p>- <code>std::span</code>, <code>std::string_view</code>, <code>std::unique_ptr</code>, <code>std::make_unique</code></p>
+<p>- <code>enum class EngineBackendKind</code></p>
+<p>- Designated initializers (<code>PoolBufferView{}</code>)</p>
+<br/>
+<p>CUDA <code>.cu</code> translation units use CUDA C++17 (standard for device code); all host <code>.cpp</code> files are C++23.</p>
+<br/>
+<hr/>
+<br/>
+<h2>Testing</h2>
+<br/>
+<h3>1. SDK import test</h3>
+<br/>
+<pre class="code"><code class="bash">
+pip install -e .
+python -c &quot;from nanoserve import NanoServe, Quantizer; print(&#x27;ok&#x27;)&quot;
+</pre>
+<br/>
+<h3>2. Quantizer CLI</h3>
+<br/>
+<pre class="code"><code class="bash">
+python -m nanoserve.quantizer --out /tmp/test.nanoq
+ls -la /tmp/test.nanoq
+</pre>
+<br/>
+<h3>3. SDK demo</h3>
+<br/>
+<pre class="code"><code class="bash">
+export LD_LIBRARY_PATH=$(pwd)/allocator/target/release:$LD_LIBRARY_PATH
+export NANOSERVE_ENGINE_LIB=$(pwd)/engine/build/libnanoserve_engine.so
+python examples/sdk_demo.py
+</pre>
+<br/>
+<h3>4. API smoke test</h3>
+<br/>
+<pre class="code"><code class="bash">
+# start server in another terminal, then:
+curl -s http://localhost:8000/health | python -m json.tool
+curl -s -X POST http://localhost:8000/v1/completions \
+  -H &#x27;Content-Type: application/json&#x27; \
+  -d &#x27;{&quot;prompt&quot;:&quot;hi&quot;,&quot;max_tokens&quot;:8,&quot;device&quot;:&quot;cpu&quot;}&#x27; | python -m json.tool
+curl -s -X POST http://localhost:8000/v1/completions \
+  -H &#x27;Content-Type: application/json&#x27; \
+  -d &#x27;{&quot;prompt&quot;:&quot;hi&quot;,&quot;max_tokens&quot;:8,&quot;device&quot;:&quot;gpu&quot;}&#x27; | python -m json.tool
+</pre>
+<br/>
+<h3>5. GPU fallback test (no GPU)</h3>
+<br/>
+<p>Expect <code>&quot;device&quot;: &quot;cpu&quot;</code> and a warning in <code>&quot;warnings&quot;</code>.</p>
+<br/>
+<h3>6. Load test</h3>
+<br/>
+<pre class="code"><code class="bash">
+python tui/load_test.py --users 20 --device cpu
+</pre>
+<br/>
+<h3>7. C allocator demo (unchanged)</h3>
+<br/>
+<pre class="code"><code class="bash">
+gcc -std=c17 -O2 -o c_examples/pool_demo c_examples/pool_demo.c \
+  -Lallocator/target/release -lbuddy_alloc -lpthread -ldl
+LD_LIBRARY_PATH=allocator/target/release ./c_examples/pool_demo
+</pre>
+<br/>
+<hr/>
+<br/>
+<h2>Troubleshooting</h2>
+<br/>
+<table>
+<tr><th>Issue</th><th>Fix</th></tr>
+<tr><td>`libnanoserve_engine.so: cannot open`</td><td>Set `NANOSERVE_ENGINE_LIB` and `LD_LIBRARY_PATH`</td></tr>
+<tr><td>GPU always falls back to CPU</td><td>Rebuild with `-DNANOSERVE_ENABLE_CUDA=ON`; check `nvidia-smi`</td></tr>
+<tr><td>CUDA build fails on GCC 15</td><td>Use `g++-9` host compiler or CUDA 12+; see `engine/nvcc_wrapper.sh`</td></tr>
+<tr><td>OpenCL not detected</td><td>Install `ocl-icd-opencl-dev opencl-headers`; rebuild with `-DNANOSERVE_ENABLE_OPENCL=ON`</td></tr>
+<tr><td>Import error for `nanoserve`</td><td>Run `pip install -e .` from repo root</td></tr>
+<tr><td>CMake version error</td><td>Requires CMake ≥ 3.22</td></tr>
+</table>
+<br/>
+<hr/>
+<br/>
+<p>To generate HTML/PDF locally:</p>
+<br/>
+<pre class="code"><code class="bash">
+pip install fpdf2
+python3 scripts/generate_reports.py
+# → documentation/SETUP.html, SETUP.pdf, reports/*.html, reports/*.pdf
+</pre>
+  <footer><p style="color:var(--muted);font-size:.85rem;margin-top:3rem">
+    Generated 2026-07-25 17:15 UTC — NanoServe documentation
+  </p></footer>
+</body>
+</html>

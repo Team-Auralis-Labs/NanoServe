@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>NanoServe</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--accent:#5eead4;--text:#e6e6e6;--muted:#8a8f98}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+  .wrap{max-width:760px;margin:0 auto;padding:32px 20px}
+  h1{font-size:1.4rem;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 24px}
+  textarea{width:100%;min-height:110px;background:var(--panel);color:var(--text);border:1px solid #2a2f3a;border-radius:10px;padding:14px;font-size:0.95rem;resize:vertical}
+  .row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  input[type=number],select{background:var(--panel);color:var(--text);border:1px solid #2a2f3a;border-radius:8px;padding:8px}
+  input[type=number]{width:90px}
+  select{min-width:90px}
+  button{background:var(--accent);color:#0f1115;border:none;border-radius:8px;padding:10px 18px;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .out{margin-top:22px;background:var(--panel);border-radius:10px;padding:16px;min-height:80px;white-space:pre-wrap;border:1px solid #2a2f3a}
+  .meta{color:var(--muted);font-size:.8rem;margin-top:8px}
+  label{color:var(--muted);font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NanoServe</h1>
+  <p class="sub">Buddy-allocator backed quantized inference — single page demo</p>
+  <textarea id="prompt" placeholder="Type a prompt...">Explain how buddy allocators work</textarea>
+  <div class="row">
+    <label for="tokens">max tokens</label>
+    <input id="tokens" type="number" value="24" min="1" max="128"/>
+    <label for="device">Compute Engine</label>
+    <select id="device">
+      <option value="cpu" selected>CPU</option>
+      <option value="gpu">GPU</option>
+      <option value="auto">Auto</option>
+    </select>
+    <button id="go">Generate</button>
+  </div>
+  <div class="out" id="out">Output will appear here.</div>
+  <div class="meta" id="meta"></div>
+</div>
+<script>
+const go = document.getElementById('go');
+go.onclick = async () => {
+  const prompt = document.getElementById('prompt').value;
+  const max_tokens = parseInt(document.getElementById('tokens').value || "24", 10);
+  const device = document.getElementById('device').value;
+  go.disabled = true; go.textContent = "Generating...";
+  document.getElementById('out').textContent = "...";
+  try {
+    const res = await fetch('/v1/completions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({prompt, max_tokens, device})
+    });
+    const data = await res.json();
+    document.getElementById('out').textContent = data.text;
+    let meta = `id=${data.id} · device=${data.device} · latency=${data.latency_ms.toFixed(1)}ms`;
+    if (data.warnings && data.warnings.length)
+      meta += ' · ' + data.warnings.join('; ');
+    document.getElementById('meta').textContent = meta;
+  } catch (e) {
+    document.getElementById('out').textContent = "Error: " + e;
+  } finally {
+    go.disabled = false; go.textContent = "Generate";
+  }
+};
+</script>
+</body>
+</html>

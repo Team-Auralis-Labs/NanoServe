@@ -12,7 +12,7 @@ console = Console()
 HELP_TEXT = """
 Slash commands:
   /device cpu|gpu|auto       — switch compute engine
-  /model [id|path]           — select model (empty = default)
+  /model [id|path]           — select model (required for GGUF)
   /format auto|nanoq|gguf    — model runtime format
   /precision int8|fp16|fp4|raw — quantization precision
   /models                    — list registered models
@@ -62,7 +62,7 @@ def main():
             if lower.startswith("/model"):
                 parts = stripped.split(maxsplit=1)
                 current_model = parts[1].strip() if len(parts) > 1 else None
-                console.print(f"[dim]model set to {current_model or 'default'}[/]")
+                console.print(f"[dim]model set to {current_model or '(none — required for GGUF)'}[/]")
                 continue
             if lower.startswith("/format"):
                 parts = stripped.split()

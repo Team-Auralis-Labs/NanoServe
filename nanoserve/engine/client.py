@@ -85,6 +85,7 @@ class NanoServe:
         quantize: bool | None = None,
         precision: PrecisionLiteral = "int8",
     ) -> str:
+        """Run inference. Pass ``model`` (registry id or path) for GGUF and multi-model use."""
         result = self._run(
             prompt, max_tokens,
             device or self.default_device,

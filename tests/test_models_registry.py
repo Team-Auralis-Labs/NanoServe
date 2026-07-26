@@ -45,6 +45,15 @@ class TestModelRegistry(unittest.TestCase):
         self.assertTrue(self.reg.delete("x"))
         self.assertIsNone(self.reg.get("x"))
 
+    def test_sync_local_gguf(self):
+        gguf = self.tmp / "demo-Q2_K.gguf"
+        gguf.write_bytes(b"GGUF")
+        added = self.reg.sync_local()
+        self.assertEqual(len(added), 1)
+        self.assertEqual(added[0].id, "demo-Q2_K")
+        self.assertEqual(self.reg.count, 1)
+        self.assertEqual(self.reg.sync_local(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

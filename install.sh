@@ -83,7 +83,7 @@ export NANOSERVE_GGUF_N_THREADS="0"
 export NANOSERVE_GGUF_N_GPU_LAYERS="0"
 export NANOSERVE_GGUF_N_BATCH="512"
 EOF
-  echo "[*] GGUF extra installed — set NANOSERVE_MODEL_PATH to a .gguf file to use format=gguf"
+  echo "[*] GGUF extra installed — pick a model via Web UI, TUI /model, or API model field"
 fi
 
 echo ""

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <memory>
 
-#if defined(__has_include) && __has_include(<span>)
+#if !defined(__CUDACC__) && defined(__has_include) && __has_include(<span>)
 #include <span>
 #else
 #include <cstddef>

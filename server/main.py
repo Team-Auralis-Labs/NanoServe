@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from nanoserve.engine.gguf_probe import gguf_available
-from nanoserve.engine.gguf_worker import gguf_model_loaded
+from nanoserve.engine.gguf_worker import default_gguf_path, gguf_model_loaded
 from nanoserve.engine.router import InferenceRouter
 from nanoserve.models.download import download_model
 from nanoserve.models.pipeline import _auto_quantize_default
@@ -139,6 +139,7 @@ async def _resolve(engine_future, fut: asyncio.Future, t0: float):
 @app.on_event("startup")
 async def startup():
     global queue, _queue_lock
+    registry.sync_local()
     queue = asyncio.Queue()
     _queue_lock = asyncio.Lock()
     asyncio.create_task(batcher_loop())
@@ -251,6 +252,12 @@ async def delete_model(model_id: str):
 async def generate(req: GenerateRequest):
     global _queue_depth
     assert queue is not None and _queue_lock is not None
+
+    if req.format == "gguf" and not req.model and not default_gguf_path():
+        raise HTTPException(
+            status_code=400,
+            detail="Select a model for GGUF inference (Web UI, TUI /model, or API model field)",
+        )
 
     async with _queue_lock:
         if MAX_QUEUE > 0 and _queue_depth >= MAX_QUEUE:

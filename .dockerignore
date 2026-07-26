@@ -1,0 +1,43 @@
+# Host build artifacts — must not enter COPY context (CMake/Rust cache paths break in-container builds)
+engine/build/
+engine/build-wasm/
+allocator/target/
+
+# Python / packaging noise
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# Local runtime (compose mounts models/ for GGUF; secrets stay off image)
+.env
+.env.*
+.env.nanoserve
+models/
+.nanoserve/
+
+# Git / IDE
+.git/
+.gitignore
+.cursor/
+.idea/
+.vscode/
+
+# WASM opt-in outputs (not used by Docker images)
+deployment/wasm/nanoserve_engine.js
+deployment/wasm/nanoserve_engine.wasm
+deployment/wasm/assets/
+
+# Local-only planning docs
+TODO-*.md
+
+# Logs / temp
+*.log
+/tmp/

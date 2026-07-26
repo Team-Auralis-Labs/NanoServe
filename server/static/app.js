@@ -5,6 +5,7 @@ async function refreshHealth() {
   try {
     const res = await fetch('/health');
     const data = await res.json();
+    window.__nanoserveHealth = data;
     document.getElementById('chipStatus').querySelector('.chip-dot').className =
       'chip-dot' + (data.status === 'ok' ? '' : ' warn');
 
@@ -17,15 +18,32 @@ async function refreshHealth() {
     const ggufOn = data.gguf_available;
     gguf.querySelector('.chip-dot').className = 'chip-dot' + (ggufOn ? '' : ' off');
     gguf.lastChild.textContent = ggufOn ? 'GGUF on' : 'GGUF off';
+
+    updateFormatOptions(ggufOn);
   } catch (_) {
     document.getElementById('chipStatus').querySelector('.chip-dot').className = 'chip-dot warn';
+  }
+}
+
+function updateFormatOptions(ggufAvailable) {
+  const formatSel = document.getElementById('format');
+  const ggufOpt = formatSel.querySelector('option[value="gguf"]');
+  if (!ggufOpt) return;
+  ggufOpt.disabled = !ggufAvailable;
+  ggufOpt.textContent = ggufAvailable ? 'GGUF' : 'GGUF (unavailable on this server)';
+  if (!ggufAvailable && formatSel.value === 'gguf') {
+    formatSel.value = 'auto';
   }
 }
 
 async function refreshModels() {
   const sel = document.getElementById('model');
   const current = sel.value;
-  sel.innerHTML = '<option value="">Default</option>';
+  const health = window.__nanoserveHealth || {};
+  const ggufOn = !!health.gguf_available;
+  sel.innerHTML = ggufOn
+    ? '<option value="">Select model…</option>'
+    : '<option value="">Built-in demo (no model)</option>';
   try {
     const res = await fetch('/v1/models');
     const data = await res.json();
@@ -122,6 +140,21 @@ go.onclick = async () => {
   const model = document.getElementById('model').value || null;
   const format = document.getElementById('format').value;
   const precision = document.getElementById('precision').value;
+  const health = window.__nanoserveHealth || {};
+  const ggufOn = !!health.gguf_available;
+
+  if (format === 'gguf' && !ggufOn) {
+    out.textContent =
+      'GGUF is not enabled on this server. Use docker compose --profile gguf (port 8002) or ENABLE_GGUF=1.';
+    out.className = 'output-text error';
+    return;
+  }
+
+  if (format === 'gguf' && ggufOn && !model) {
+    out.textContent = 'Select a model for GGUF inference (dropdown or Download model).';
+    out.className = 'output-text error';
+    return;
+  }
 
   go.disabled = true;
   go.textContent = 'Generating…';
@@ -154,5 +187,4 @@ go.onclick = async () => {
   }
 };
 
-refreshHealth();
-refreshModels();
+refreshHealth().then(refreshModels);

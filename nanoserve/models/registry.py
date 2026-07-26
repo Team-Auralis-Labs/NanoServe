@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -12,6 +13,10 @@ from typing import Any
 
 def _models_dir() -> Path:
     return Path(os.environ.get("NANOSERVE_MODELS_DIR", Path.home() / ".nanoserve" / "models"))
+
+
+def _safe_id(name: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9._-]+", "-", name).strip("-") or "model"
 
 
 @dataclass
@@ -66,6 +71,52 @@ class ModelRegistry:
 
     def list(self) -> list[ModelEntry]:
         return list(self._entries.values())
+
+    def sync_local(self) -> list[ModelEntry]:
+        """Register .gguf and .nanoq files in the models directory (user-placed weights)."""
+        if not self.root.exists():
+            return []
+
+        known = {
+            str(Path(p).resolve())
+            for e in self._entries.values()
+            for p in (e.source_path, e.nanoq_path)
+            if p
+        }
+        added: list[ModelEntry] = []
+
+        for pattern in ("*.gguf", "*.nanoq"):
+            for path in sorted(self.root.glob(pattern)):
+                if not path.is_file():
+                    continue
+                resolved = str(path.resolve())
+                if resolved in known:
+                    continue
+
+                fmt = "gguf" if path.suffix.lower() == ".gguf" else "nanoq"
+                model_id = _safe_id(path.stem)
+                base_id = model_id
+                n = 1
+                while model_id in self._entries:
+                    model_id = f"{base_id}-{n}"
+                    n += 1
+
+                entry = ModelEntry(
+                    id=model_id,
+                    source_path=resolved,
+                    nanoq_path=resolved if fmt == "nanoq" else None,
+                    format=fmt,
+                    size_bytes=path.stat().st_size,
+                    quantized=True,
+                    source="local",
+                )
+                self._entries[model_id] = entry
+                known.add(resolved)
+                added.append(entry)
+
+        if added:
+            self._save()
+        return added
 
     def resolve_path(self, model: str | None) -> str | None:
         if not model:

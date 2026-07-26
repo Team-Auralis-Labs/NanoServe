@@ -53,6 +53,12 @@ go.onclick = async () => {
   const prompt = document.getElementById('prompt').value;
   const maxTokens = parseInt(document.getElementById('tokens').value || '24', 10);
 
+  if (!modelLabel) {
+    out.textContent = 'Load a .nanoq file first (Load .nanoq file button).';
+    out.className = 'output-text error';
+    return;
+  }
+
   go.disabled = true;
   go.textContent = 'Generating…';
   out.textContent = 'Thinking…';

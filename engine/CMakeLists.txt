@@ -6,7 +6,9 @@ option(NANOSERVE_ENABLE_OPENCL "Build OpenCL backend" OFF)
 if(NANOSERVE_ENABLE_CUDA)
     set(CMAKE_CUDA_ARCHITECTURES 86 CACHE STRING "CUDA SM arch" FORCE)
     set(CMAKE_CUDA_COMPILER "${CMAKE_CURRENT_LIST_DIR}/nvcc_wrapper.sh" CACHE FILEPATH "CUDA compiler" FORCE)
-    set(CMAKE_CUDA_HOST_COMPILER /usr/bin/g++-9 CACHE FILEPATH "CUDA host compiler" FORCE)
+    if(NOT CMAKE_CUDA_HOST_COMPILER)
+        set(CMAKE_CUDA_HOST_COMPILER /usr/bin/g++ CACHE FILEPATH "CUDA host compiler" FORCE)
+    endif()
     set(CMAKE_CUDA_COMPILER_FORCED TRUE CACHE BOOL "" FORCE)
     set(CMAKE_CUDA_RUNTIME_LIBRARY Shared CACHE STRING "CUDA runtime library type" FORCE)
     project(NanoServeEngine CXX CUDA)
@@ -29,8 +31,11 @@ set(ENGINE_SOURCES
 )
 
 if(NANOSERVE_ENABLE_CUDA)
+    # CMake 3.22 in CUDA devel images may not register CUDA20; pass -std=c++20 to nvcc explicitly.
     set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -std=c++20")
     find_package(CUDAToolkit REQUIRED)
+    link_directories(${CUDAToolkit_LIBRARY_DIR})
     list(APPEND ENGINE_SOURCES src/backend_cuda.cu)
     add_compile_definitions(NANOSERVE_HAS_CUDA)
 else()
@@ -53,11 +58,7 @@ if(NANOSERVE_ENABLE_CUDA)
         CUDA_SEPARABLE_COMPILATION OFF
         CUDA_RESOLVE_DEVICE_SYMBOLS OFF
     )
-    target_link_directories(nanoserve_engine PRIVATE
-        /usr/lib/cuda/lib64
-        /usr/lib/cuda-11.2/targets/x86_64-linux/lib
-    )
-    target_link_libraries(nanoserve_engine /usr/lib/cuda/lib64/libcudart.so)
+    target_link_libraries(nanoserve_engine CUDA::cudart)
 endif()
 
 if(NANOSERVE_ENABLE_OPENCL)

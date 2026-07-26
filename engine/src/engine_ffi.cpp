@@ -14,6 +14,21 @@ void* engine_init_backend(int backend) {
     return engine_create(static_cast<EngineBackendKind>(backend));
 }
 
+void* engine_init_with_model(const char* nanoq_path, int backend) {
+    if (backend < static_cast<int>(EngineBackendKind::Cpu) ||
+        backend > static_cast<int>(EngineBackendKind::OpenCl))
+        return nullptr;
+    return engine_create_with_model(static_cast<EngineBackendKind>(backend), nanoq_path);
+}
+
+int engine_reload_model(void* handle, const char* nanoq_path) {
+    return ::engine_reload_model(static_cast<EngineHandle*>(handle), nanoq_path);
+}
+
+const char* engine_model_info(void* handle) {
+    return engine_get_model_info(static_cast<EngineHandle*>(handle));
+}
+
 int engine_infer(void* handle, const char* prompt, int max_tokens, char* out_buf, int out_buf_len) {
     return engine_run_infer(static_cast<EngineHandle*>(handle), prompt, max_tokens, out_buf, out_buf_len);
 }

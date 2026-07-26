@@ -16,13 +16,14 @@ endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_compile_options(-O3 -march=native -fPIC)
+add_compile_options(-O3 -march=native -mf16c -fPIC)
 include_directories(include)
 link_directories(${CMAKE_SOURCE_DIR}/../allocator/target/release)
 
 set(ENGINE_SOURCES
     src/engine_ffi.cpp
     src/engine_core.cpp
+    src/nanoq_loader.cpp
     src/backend_cpu.cpp
     src/backend_factory.cpp
 )

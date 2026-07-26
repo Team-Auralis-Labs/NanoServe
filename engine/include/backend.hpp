@@ -1,4 +1,5 @@
 #pragma once
+#include "nanoq_loader.hpp"
 #include <cstdint>
 #include <memory>
 
@@ -28,20 +29,22 @@ enum class EngineBackendKind : int {
     OpenCl = 2,
 };
 
-// Host-side weight/activation views backed by the Rust buddy allocator pools.
 struct PoolBufferView {
     int8_t* weights = nullptr;
     float* activations = nullptr;
     size_t length = 0;
     void* weights_pool = nullptr;
     void* scratch_pool = nullptr;
+    const NanoqModel* nanoq = nullptr;
 };
 
 class ComputeBackend {
 public:
     virtual ~ComputeBackend() = default;
-    // INT8 GEMV: score = sum(weights[i] * activations[i]) — matmul row-vector form.
     virtual float gemv_int8(std::span<const int8_t> weights, std::span<const float> acts) = 0;
+    virtual float gemv_fp16(std::span<const uint16_t> weights, std::span<const float> acts) = 0;
+    virtual float gemv_fp4(std::span<const uint8_t> packed, std::span<const float> scales,
+                           int block_size, std::span<const float> acts) = 0;
     virtual void bind_pool_buffers(const PoolBufferView& view) { pool_view_ = view; }
     virtual const char* name() const = 0;
 

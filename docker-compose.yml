@@ -28,3 +28,19 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+
+  nanoserve-gguf:
+    profiles: ["gguf"]
+    build:
+      context: .
+      target: runtime-gguf
+    ports:
+      - "8002:8000"
+    environment:
+      - NANOSERVE_ENGINE_LIB=/opt/nanoserve/lib/libnanoserve_engine.so
+      - LD_LIBRARY_PATH=/opt/nanoserve/lib
+      - NANOSERVE_GGUF_N_CTX=2048
+      - NANOSERVE_GGUF_N_BATCH=512
+      - NANOSERVE_GGUF_N_GPU_LAYERS=0
+    volumes:
+      - ${NANOSERVE_GGUF_MODEL_DIR:-./models}:/models:ro

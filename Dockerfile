@@ -68,10 +68,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip libgomp1 ocl-icd-libopencl1 && \
     rm -rf /var/lib/apt/lists*
-COPY --from=builder-gpu /src/allocator/target/release/libbuddy_alloc.so /opt/nanoserve/lib/
-COPY --from=builder-gpu /src/engine/build/libnanoserve_engine.so /opt/nanoserve/lib/
-COPY --from=builder-gpu /wheels /wheels
-RUN pip3 install --no-cache-dir /wheels/*.whl && pip3 install --no-cache-dir "nanoserve[server]"
 COPY server server/
 COPY tui tui/
 COPY examples examples/
@@ -80,3 +76,10 @@ ENV NANOSERVE_ENGINE_LIB=/opt/nanoserve/lib/libnanoserve_engine.so
 WORKDIR /app/server
 EXPOSE 8000
 CMD ["python3", "main.py"]
+
+# ---- Runtime GGUF (optional llama-cpp-python) ----
+FROM runtime-cpu AS runtime-gguf
+RUN pip install --no-cache-dir "llama-cpp-python>=0.2.90"
+ENV NANOSERVE_DEFAULT_FORMAT=auto
+ENV NANOSERVE_GGUF_N_CTX=2048
+ENV NANOSERVE_GGUF_N_BATCH=512

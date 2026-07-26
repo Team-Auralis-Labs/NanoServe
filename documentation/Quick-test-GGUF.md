@@ -30,13 +30,135 @@ You need the **GGUF Docker profile** for this guide.
 - distilgpt2: https://huggingface.co/tensorblock/distilgpt2-GGUF  
 - SmolLM-135M: https://huggingface.co/neopolita/smollm-135m-gguf  
 
-Download **one** `.gguf` file into a folder called `models` in your NanoServe project:
+---
+
+## How to download the model file (pick one way)
+
+You need **one** `.gguf` file on your computer before starting Docker.  
+These models are free on **Hugging Face** (like an app store for AI files).
+
+### First — make the folder
+
+Open a terminal in your NanoServe project folder and run:
+
+```bash
+cd /path/to/NanoServe
+mkdir -p models
+```
+
+When done, it should look like:
 
 ```
 NanoServe/
   models/
-    distilgpt2-Q2_K.gguf    ← example
+    distilgpt2-Q2_K.gguf    ← you will put the file here
 ```
+
+---
+
+### Way A — Download in the browser (easiest)
+
+Good if you prefer clicking instead of typing commands.
+
+**For distilgpt2 (~61 MB):**
+
+1. Open: https://huggingface.co/tensorblock/distilgpt2-GGUF  
+2. Click the **Files and versions** tab (or scroll to the file list).  
+3. Find **`distilgpt2-Q2_K.gguf`** (~61 MB).  
+4. Click the **↓ download** icon next to that file.  
+5. Wait — it can take a few minutes on slow Wi‑Fi.  
+6. Move the file from your **Downloads** folder into `NanoServe/models/`:
+
+   ```bash
+   mv ~/Downloads/distilgpt2-Q2_K.gguf ./models/
+   ```
+
+**For SmolLM-135M (~88 MB):**
+
+1. Open: https://huggingface.co/neopolita/smollm-135m-gguf  
+2. **Files and versions** → find **`SmolLM-135M-Q2_K.gguf`**.  
+3. Download it.  
+4. Move it:
+
+   ```bash
+   mv ~/Downloads/SmolLM-135M-Q2_K.gguf ./models/
+   ```
+
+**Check the file is really there:**
+
+```bash
+ls -lh models/
+```
+
+You should see your `.gguf` file and a size like `61M` or `88M`.
+
+---
+
+### Way B — Download in the terminal (one command)
+
+Good if you already use the terminal. Needs **internet**.
+
+**distilgpt2:**
+
+```bash
+mkdir -p models
+curl -L -o models/distilgpt2-Q2_K.gguf \
+  "https://huggingface.co/tensorblock/distilgpt2-GGUF/resolve/main/distilgpt2-Q2_K.gguf"
+```
+
+**SmolLM-135M:**
+
+```bash
+mkdir -p models
+curl -L -o models/SmolLM-135M-Q2_K.gguf \
+  "https://huggingface.co/neopolita/smollm-135m-gguf/resolve/main/SmolLM-135M-Q2_K.gguf"
+```
+
+`-L` follows redirects. `-o` saves with the right filename.
+
+Verify:
+
+```bash
+ls -lh models/*.gguf
+```
+
+---
+
+### Way C — Hugging Face CLI (optional)
+
+Install once:
+
+```bash
+pip install huggingface-hub
+```
+
+Download distilgpt2:
+
+```bash
+mkdir -p models
+huggingface-cli download tensorblock/distilgpt2-GGUF \
+  distilgpt2-Q2_K.gguf \
+  --local-dir models \
+  --local-dir-use-symlinks False
+```
+
+The file ends up at `models/distilgpt2-Q2_K.gguf`.
+
+---
+
+### Match the filename to Docker
+
+When you start the server, `NANOSERVE_MODEL_PATH` must use the **exact name** of the file you downloaded:
+
+| If you downloaded… | Use this export |
+|------------------|-----------------|
+| `distilgpt2-Q2_K.gguf` | `export NANOSERVE_MODEL_PATH=/models/distilgpt2-Q2_K.gguf` |
+| `SmolLM-135M-Q2_K.gguf` | `export NANOSERVE_MODEL_PATH=/models/SmolLM-135M-Q2_K.gguf` |
+
+Docker maps your laptop folder `./models` → `/models` inside the container.  
+So `/models/...` in the export = file inside your `NanoServe/models/` folder.
+
+**Do not** use the Web UI “Download model” button for GGUF in this guide — that path is for other weight types. For GGUF, you download the `.gguf` file yourself (ways A–C above), then start Docker.
 
 ---
 
@@ -46,7 +168,7 @@ Open a terminal in the NanoServe folder:
 
 ```bash
 mkdir -p models
-# put your .gguf file inside models/
+# (download .gguf into models/ first — see "How to download" above)
 
 export NANOSERVE_MODEL_PATH=/models/distilgpt2-Q2_K.gguf
 docker compose --profile gguf up --build
@@ -209,7 +331,9 @@ Phones cannot run the TUI (needs Python in a terminal). Use the **browser** on p
 | Still fake demo text | Set **Format → GGUF** |
 | `gguf_model_loaded: false` | Check `NANOSERVE_MODEL_PATH` points to your file inside `/models/` |
 | Phone can’t connect | Same Wi‑Fi; use host IP not `localhost`; open firewall port 8002 |
-| Download failed in Web | GGUF path uses a **file you copied**, not HF download — put `.gguf` in `models/` folder |
+| Download stuck or tiny file | Re-download; real file should be ~61 MB or ~88 MB, not a few KB |
+| Wrong filename in Docker | `ls models/` and match `NANOSERVE_MODEL_PATH` exactly |
+| Download failed in Web UI | Use browser/curl/CLI above — GGUF is not the Web “Download model” button |
 | Very slow | Normal on CPU for first run — model loads once |
 
 ---
@@ -217,7 +341,7 @@ Phones cannot run the TUI (needs Python in a terminal). Use the **browser** on p
 ## Cheat sheet
 
 ```bash
-# 1. Put model in ./models/
+# 1. Download .gguf into ./models/  (browser, curl, or huggingface-cli — see above)
 # 2. Start
 export NANOSERVE_MODEL_PATH=/models/distilgpt2-Q2_K.gguf
 docker compose --profile gguf up --build

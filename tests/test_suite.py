@@ -185,6 +185,15 @@ class TestHTTPServer(unittest.TestCase):
         data = r.json()
         self.assertEqual(data["status"], "ok")
         self.assertIn("gpu_cuda", data)
+        self.assertIn("models_registered", data)
+        self.assertIn("gguf_available", data)
+        self.assertIn("active_format", data)
+        self.assertIn("native_available", data)
+
+    def test_list_models(self):
+        r = httpx.get(f"{self.base}/v1/models")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("models", r.json())
 
     def test_completions_cpu(self):
         r = httpx.post(

@@ -24,7 +24,18 @@ Complete guide for installing, running, and testing NanoServe in every mode.
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| **Web UI** | Working | http://localhost:8000 — prompt, max tokens, Compute Engine dropdown (CPU/GPU/Auto) |
+| **Web UI** | Working | http://localhost:8000 — prompt, model/format/precision, Compute Engine, download |
+| **Model registry** | Working | `GET /v1/models`, download HF/URL, auto-quantize to `.nanoq` |
+| **Multi-model** | Working | Per-request `model` id; LRU cache (`NANOSERVE_MAX_LOADED_MODELS`) |
+| **GGUF (optional)** | Optional | `pip install nanoserve[gguf]` — real inference via llama-cpp-python |
+
+For GGUF production use a **single gunicorn worker** to avoid duplicating model weights. Prefer Q4_K_S or Q4_0 quantizations under 8 GB RAM.
+
+```bash
+ENABLE_GGUF=1 ./install.sh
+export NANOSERVE_MODEL_PATH=/path/to/model.gguf
+export NANOSERVE_GGUF_N_GPU_LAYERS=0   # set >0 for GPU offload
+```
 | **CUDA backend** | Working | INT8 GEMV kernel; verified on NVIDIA RTX 3060; CPU/CUDA output parity confirmed |
 | **OpenCL backend** | Optional | Code complete; requires `ocl-icd-opencl-dev` + `opencl-headers` at build time |
 | **CPU backend** | Working | AVX2 SIMD; default path, backward-compatible FFI |

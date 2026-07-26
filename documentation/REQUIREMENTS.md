@@ -50,6 +50,22 @@ ENABLE_CUDA=1 ./install.sh
 ENABLE_OPENCL=1 ./install.sh
 ```
 
+## Optional — model download and GGUF
+
+| Feature | Install |
+|---------|---------|
+| **HuggingFace + safetensors download** | `pip install -e ".[models]"` or `ENABLE_MODELS=1 ./install.sh` |
+| **GGUF inference (llama-cpp)** | `pip install -e ".[gguf]"` or `ENABLE_GGUF=1 ./install.sh` |
+
+Environment:
+
+```bash
+export NANOSERVE_MODELS_DIR="$HOME/.nanoserve/models"
+export NANOSERVE_AUTO_QUANTIZE="1"          # default: convert raw weights to int8 .nanoq
+export NANOSERVE_MAX_LOADED_MODELS="2"
+export NANOSERVE_DEFAULT_PRECISION="int8"
+```
+
 ## Optional — testing & profiling
 
 | Tool | Purpose |

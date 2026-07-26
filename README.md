@@ -94,24 +94,26 @@ Open **http://localhost:8000** — Web UI with **Compute Engine** dropdown (CPU 
 | Task | Command / link |
 |------|----------------|
 | Full usage guide | [documentation/USAGE.md](documentation/USAGE.md) |
-| Web UI | http://localhost:8000 |
+| Web UI | http://localhost:8000 — model, format, precision, download |
 | Health check | `curl -s localhost:8000/health \| jq .` |
-| Completions API | `POST /v1/completions` with `"device": "cpu\|gpu\|auto"` |
+| List models | `curl -s localhost:8000/v1/models \| jq .` |
+| Completions API | `POST /v1/completions` with `device`, `model`, `format`, `precision` |
 | Python SDK | `python examples/sdk_demo.py` |
-| Terminal chat | `python tui/client.py --device auto` |
+| Terminal chat | `python tui/client.py --device auto --model my-model` |
 | Load test | `python3 tests/load_test_report.py --preset 300` |
 
 ```bash
 curl -X POST http://localhost:8000/v1/completions \
   -H 'Content-Type: application/json' \
-  -d '{"prompt":"Hello","max_tokens":24,"device":"auto"}'
+  -d '{"prompt":"Hello","max_tokens":24,"device":"auto","model":"my-model","precision":"int8"}'
 ```
 
 ```python
 from nanoserve import NanoServe
 
-engine = NanoServe(device="auto")
+engine = NanoServe(device="auto", model="my-model")
 print(engine.generate("Hello world", max_tokens=50))
+engine.download("hf", repo_id="org/model", filename="model.safetensors")
 ```
 
 ---
@@ -193,8 +195,43 @@ cd engine/build && cmake .. -DNANOSERVE_ENABLE_CUDA=ON && make -j$(nproc)
 
 - **Backward-compatible FFI:** `engine_init()`, `engine_infer()`, `engine_cleanup()` unchanged on CPU path.
 - **Device routing:** `device=cpu|gpu|auto` on API, SDK, Web UI, and TUI.
+- **Model routing:** `model`, `format=auto|nanoq|gguf`, `precision=int8|fp16|fp4|raw` on all clients.
+- **Auto-quantize:** Raw weights default to int8 `.nanoq`; set `quantize=false` or `precision=raw` to use unquantized fp16 (with warning).
+- **Multi-model:** LRU cache (`NANOSERVE_MAX_LOADED_MODELS`); download via HuggingFace Hub or URL.
 - **GPU fallback:** Graceful CPU fallback with warnings when GPU unavailable.
 - **300-user native:** Same stack as Docker demo — nginx + 4× gunicorn via `run_native_300.sh`; not a separate codebase.
+
+---
+
+## Optional GGUF inference
+
+Real LLM inference via **llama-cpp-python** — opt-in only; default install unchanged.
+
+```bash
+pip install -e ".[gguf]"
+# or
+ENABLE_GGUF=1 ./install.sh
+
+export NANOSERVE_MODEL_PATH=/path/to/model.gguf
+curl -X POST localhost:8000/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Hello","max_tokens":16,"format":"gguf","device":"cpu"}'
+```
+
+Docker (optional profile, port 8002):
+
+```bash
+docker compose --profile gguf up --build
+```
+
+| Env | Default | Purpose |
+|-----|---------|---------|
+| `NANOSERVE_MODEL_PATH` | — | Default `.gguf` or `.nanoq` path |
+| `NANOSERVE_GGUF_N_CTX` | 2048 | Context window |
+| `NANOSERVE_GGUF_N_GPU_LAYERS` | 0 | GPU layers when `device=gpu\|auto` |
+| `NANOSERVE_GGUF_N_BATCH` | 512 | Batch size |
+
+Use Q4_K_S or Q4_0 GGUF models under 8 GB RAM. For production GGUF, prefer a **single gunicorn worker** to avoid duplicating weights in memory.
 
 ---
 

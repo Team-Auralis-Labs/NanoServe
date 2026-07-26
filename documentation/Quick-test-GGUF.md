@@ -201,11 +201,121 @@ Then use **http://localhost:8000** instead of 8002.
 
 ---
 
-## Step 2 — Test in the Web UI (easiest)
+## Optional — GPU quick test (NVIDIA, native)
 
-1. Open **http://localhost:8002**
+**Short version:** GGUF on **GPU** works best with a **native install** on your laptop (not the default GGUF Docker image). Docker port **8002** is **CPU-only** unless you customize the image yourself.
+
+You need:
+
+- An **NVIDIA** graphics card + driver installed  
+- **CUDA** working on the host (`nvidia-smi` should print a table)
+
+### 1. Install NanoServe with GGUF
+
+```bash
+ENABLE_GGUF=1 ./install.sh
+source .venv/bin/activate && source .env.nanoserve
+```
+
+The default `pip install llama-cpp-python` is **CPU-only**. Reinstall it **with CUDA** so GGUF can use the GPU:
+
+```bash
+pip uninstall -y llama-cpp-python
+CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+```
+
+*(This step can take several minutes — it compiles for your GPU.)*
+
+### 2. Point at your model and turn on GPU layers
+
+```bash
+export NANOSERVE_MODEL_PATH="$PWD/models/distilgpt2-Q2_K.gguf"
+export NANOSERVE_GGUF_N_GPU_LAYERS=99
+```
+
+- **`99`** = “offload as many layers as possible to the GPU” (fine for tiny models).  
+- **`0`** = CPU only (Docker default).
+
+### 3. Start the server
+
+```bash
+./scripts/run_native.sh
+```
+
+Open **http://localhost:8000**
+
+### 4. Test GPU in the Web UI
+
+1. **Format** → **GGUF**  
+2. **Compute engine** → **GPU** (or **Auto**)  
+3. Prompt → **Generate**
+
+In the response meta you should see `device: gpu`. If you see a **warning** like “GPU requested but N_GPU_LAYERS=0”, check step 2.
+
+**Health check:**
+
+```bash
+curl -s http://localhost:8000/health | jq '.gguf_available, .gpu_cuda, .gpu_available'
+```
+
+### 5. Test GPU in the TUI
+
+```bash
+python tui/client.py http://127.0.0.1:8000 --format gguf --device gpu
+```
+
+Or mid-chat: `/device gpu`
+
+### 6. Test GPU with API / Python
+
+```bash
+curl -X POST http://localhost:8000/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Hello GPU","max_tokens":32,"format":"gguf","device":"gpu"}'
+```
+
+Look for `"device": "gpu"` in the JSON.
+
+```python
+import httpx
+r = httpx.post(
+    "http://127.0.0.1:8000/v1/completions",
+    json={"prompt": "Hello GPU", "max_tokens": 32, "format": "gguf", "device": "gpu"},
+    timeout=120.0,
+)
+print(r.json()["device"], r.json()["text"])
+```
+
+### GPU from another laptop on Wi‑Fi
+
+Same as CPU, but pick **GPU** in the Web UI or use `--device gpu` in the TUI:
+
+```bash
+python tui/client.py http://192.168.1.42:8000 --format gguf --device gpu
+```
+
+The **GPU runs on the host** that started `./scripts/run_native.sh` — your phone or other laptop only sends HTTP.
+
+### Docker GGUF + GPU?
+
+The stock **`docker compose --profile gguf`** image:
+
+- Uses a **CPU** base image  
+- Sets `NANOSERVE_GGUF_N_GPU_LAYERS=0`  
+- Does **not** pass through NVIDIA GPUs  
+
+So the quick-test Docker path stays **CPU**. For a GPU GGUF quick test, use **native** steps above.
+
+| Path | GPU for GGUF? |
+|------|----------------|
+| Docker `--profile gguf` (port 8002) | **No** (CPU) — easiest quick test |
+| Native + CUDA `llama-cpp-python` + `N_GPU_LAYERS=99` | **Yes** |
+
+---
+
+1. Open **http://localhost:8002** (Docker) or **http://localhost:8000** (native)
 2. **Format** → pick **GGUF**
-3. **Compute engine** → **CPU** (fine for tiny models)
+3. **Compute engine** → **CPU** (Docker / easiest) or **GPU** (native + [GPU setup](#optional--gpu-quick-test-nvidia-native) above)
 4. Type a short prompt, e.g. `Hello, how are you?`
 5. Click **Generate**
 
@@ -320,6 +430,7 @@ Phones cannot run the TUI (needs Python in a terminal). Use the **browser** on p
 | Slightly better tiny chat (~88 MB) | **SmolLM-135M-Q2_K.gguf** |
 | Just testing download size | **gte-small** — but it won’t chat |
 | Default Docker, no download | Demo mode only — not real GGUF |
+| GGUF on GPU (NVIDIA) | Native install + CUDA `llama-cpp-python` — see [GPU section](#optional--gpu-quick-test-nvidia-native) |
 
 ---
 
@@ -335,6 +446,9 @@ Phones cannot run the TUI (needs Python in a terminal). Use the **browser** on p
 | Wrong filename in Docker | `ls models/` and match `NANOSERVE_MODEL_PATH` exactly |
 | Download failed in Web UI | Use browser/curl/CLI above — GGUF is not the Web “Download model” button |
 | Very slow | Normal on CPU for first run — model loads once |
+| Picked GPU but still CPU | Native only: reinstall `llama-cpp-python` with `CMAKE_ARGS=-DLLAMA_CUDA=on`; set `NANOSERVE_GGUF_N_GPU_LAYERS=99` |
+| GPU warning in response | `N_GPU_LAYERS=0` — export `NANOSERVE_GGUF_N_GPU_LAYERS=99` and restart server |
+| GPU on Docker 8002 | Stock GGUF Docker is CPU-only — use [native GPU section](#optional--gpu-quick-test-nvidia-native) |
 
 ---
 
@@ -353,6 +467,14 @@ docker compose --profile gguf up --build
 # 4. Other devices (replace IP)
 #    Web → http://192.168.1.42:8002
 #    TUI → python tui/client.py http://192.168.1.42:8002 --format gguf
+
+# --- Optional GPU (native, not Docker 8002) ---
+# CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+# export NANOSERVE_GGUF_N_GPU_LAYERS=99
+# export NANOSERVE_MODEL_PATH=$PWD/models/distilgpt2-Q2_K.gguf
+# ./scripts/run_native.sh
+# Web → Format GGUF, Compute engine GPU
+# TUI → python tui/client.py http://127.0.0.1:8000 --format gguf --device gpu
 ```
 
 ---

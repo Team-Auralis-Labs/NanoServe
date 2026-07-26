@@ -15,7 +15,7 @@ One-page setup, startup, and usage for **every** way to run NanoServe.
 | [Web UI](#9-web-ui-all-server-methods) | Interactive browser client | Yes (any server above) | http://localhost:8000 |
 | [TUI](#10-terminal-ui-tui) | Terminal client + load tests | Yes | `python tui/client.py` |
 
-**Related docs:** [SETUP.md](SETUP.md) · [USAGE.md](USAGE.md) · [SCALING.md](SCALING.md) · [WASM.md](WASM.md) · [REQUIREMENTS.md](REQUIREMENTS.md)
+**Related docs:** [SETUP.md](SETUP.md) · [USAGE.md](USAGE.md) · [How-to-add-models-doc.md](How-to-add-models-doc.md) · [connect-network.md](connect-network.md) · [SCALING.md](SCALING.md) · [WASM.md](WASM.md) · [REQUIREMENTS.md](REQUIREMENTS.md)
 
 ---
 

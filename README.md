@@ -13,6 +13,9 @@
 <p align="center">
   <a href="documentation/index.html">Documentation</a> ·
   <a href="documentation/Quick-deploy-method.md"><strong>Quick deploy</strong></a> ·
+  <a href="documentation/How-to-add-models-doc.md">Add models</a> ·
+  <a href="documentation/Quick-test-GGUF.md">Test GGUF</a> ·
+  <a href="documentation/connect-network.md">Connect over LAN</a> ·
   <a href="documentation/SETUP.md">Setup</a> ·
   <a href="documentation/USAGE.md">Usage</a> ·
   <a href="documentation/reports/FULL_TEST_REPORT.md">Test report</a>
@@ -25,6 +28,9 @@
 | Area | Highlights |
 |------|------------|
 | **Quick deploy guide** | [documentation/Quick-deploy-method.md](documentation/Quick-deploy-method.md) — setup, startup, and usage for every deployment method (Docker, native, WASM, SDK, Web UI, TUI) |
+| **Add models** | [documentation/How-to-add-models-doc.md](documentation/How-to-add-models-doc.md) — download, register, and use models via Web UI, API, SDK, and TUI |
+| **Quick GGUF test** | [documentation/Quick-test-GGUF.md](documentation/Quick-test-GGUF.md) — try tiny real AI models (distilgpt2, SmolLM) via Web, TUI, and phone on Wi‑Fi |
+| **LAN & mesh** | [documentation/connect-network.md](documentation/connect-network.md) — phones, laptops, TUI, and multi-host mesh on one network |
 | **Web UI** | Frosted-glass panels, animated gradient orbs, live health chips (GPU / models / GGUF) |
 | **Multi-model** | Registry, HuggingFace + URL download, LRU cache, `GET/POST/DELETE /v1/models` |
 | **`.nanoq` v2** | int8, fp16, fp4 weights; safetensors input; C++ loader + SIMD (F16C/AVX2) + CUDA kernels |
@@ -179,6 +185,8 @@ npx serve deployment/wasm                        # or: npm run serve:wasm
 
 Open the URL printed by `serve` → load a `.nanoq` file → Generate.
 
+**Other devices on your Wi‑Fi:** use the host LAN IP — [Connect over LAN](documentation/connect-network.md).
+
 ---
 
 ## How to use
@@ -186,6 +194,9 @@ Open the URL printed by `serve` → load a `.nanoq` file → Generate.
 | Task | Command / link |
 |------|----------------|
 | **Quick deploy (all methods)** | [documentation/Quick-deploy-method.md](documentation/Quick-deploy-method.md) |
+| **Add & use models** | [documentation/How-to-add-models-doc.md](documentation/How-to-add-models-doc.md) |
+| **Quick GGUF test (tiny models)** | [documentation/Quick-test-GGUF.md](documentation/Quick-test-GGUF.md) |
+| **Connect from phone / other laptop** | [documentation/connect-network.md](documentation/connect-network.md) |
 | Full guide | [documentation/USAGE.md](documentation/USAGE.md) |
 | Web UI | http://localhost:8000 |
 | Health | `curl -s localhost:8000/health \| jq .` |
@@ -224,6 +235,8 @@ print(engine.list_models())
 
 ## Multi-model & `.nanoq` v2
 
+**Full guide:** [documentation/How-to-add-models-doc.md](documentation/How-to-add-models-doc.md) — Web UI, API, SDK, TUI, Docker, and manual setup.
+
 | Feature | Detail |
 |---------|--------|
 | **Weight format** | `.nanoq` v2 header + int8 / fp16 / fp4 payload |
@@ -248,15 +261,13 @@ export NANOSERVE_DEFAULT_PRECISION="int8"
 
 Real LLM output via **llama-cpp-python** — opt-in; default install has zero new dependencies.
 
-```bash
-pip install -e ".[gguf]"
-# or
-ENABLE_GGUF=1 ./install.sh
+**Beginner guide:** [documentation/Quick-test-GGUF.md](documentation/Quick-test-GGUF.md) — download a tiny `.gguf`, start GGUF Docker on port **8002**, test in Web UI / TUI / from your phone on the same Wi‑Fi.
 
-export NANOSERVE_MODEL_PATH=/path/to/model.gguf
-curl -X POST localhost:8000/v1/completions \
-  -H 'Content-Type: application/json' \
-  -d '{"prompt":"Hello","max_tokens":16,"format":"gguf","device":"cpu"}'
+```bash
+mkdir -p models
+# Download distilgpt2-Q2_K.gguf into models/ (see Quick-test-GGUF.md)
+export NANOSERVE_MODEL_PATH=/models/distilgpt2-Q2_K.gguf
+docker compose --profile gguf up --build   # → http://localhost:8002
 ```
 
 | Env | Default | Purpose |

@@ -1,0 +1,9 @@
+{
+  "name": "nanoserve-wasm-demo",
+  "private": true,
+  "description": "Optional browser WASM build for NanoServe demo",
+  "scripts": {
+    "build:wasm": "./scripts/build_wasm.sh",
+    "serve:wasm": "npx --yes serve deployment/wasm"
+  }
+}

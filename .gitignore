@@ -55,6 +55,13 @@ Thumbs.db
 
 # Local-only planning docs (implemented; not published)
 TODO-plan-GGUF.md
+TODO-WASM-LEAN.md
+
+# WASM build artifacts (opt-in browser demo)
+engine/build-wasm/
+deployment/wasm/nanoserve_engine.js
+deployment/wasm/nanoserve_engine.wasm
+deployment/wasm/assets/demo.nanoq
 
 # Logs & temp
 *.log

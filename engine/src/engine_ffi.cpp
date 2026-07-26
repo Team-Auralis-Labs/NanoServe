@@ -21,8 +21,20 @@ void* engine_init_with_model(const char* nanoq_path, int backend) {
     return engine_create_with_model(static_cast<EngineBackendKind>(backend), nanoq_path);
 }
 
+void* engine_init_with_model_bytes(const uint8_t* data, size_t len, int backend) {
+    if (backend < static_cast<int>(EngineBackendKind::Cpu) ||
+        backend > static_cast<int>(EngineBackendKind::OpenCl))
+        return nullptr;
+    return engine_create_with_model_bytes(
+        static_cast<EngineBackendKind>(backend), data, len);
+}
+
 int engine_reload_model(void* handle, const char* nanoq_path) {
     return ::engine_reload_model(static_cast<EngineHandle*>(handle), nanoq_path);
+}
+
+int engine_reload_model_bytes(void* handle, const uint8_t* data, size_t len) {
+    return ::engine_reload_model_bytes(static_cast<EngineHandle*>(handle), data, len);
 }
 
 const char* engine_model_info(void* handle) {

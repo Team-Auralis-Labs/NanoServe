@@ -21,7 +21,10 @@ struct EngineHandle {
 
 EngineHandle* engine_create(EngineBackendKind kind);
 EngineHandle* engine_create_with_model(EngineBackendKind kind, const char* nanoq_path);
+EngineHandle* engine_create_with_model_bytes(
+    EngineBackendKind kind, const uint8_t* data, size_t len);
 int engine_reload_model(EngineHandle* h, const char* nanoq_path);
+int engine_reload_model_bytes(EngineHandle* h, const uint8_t* data, size_t len);
 const char* engine_get_model_info(EngineHandle* h);
 int engine_run_infer(EngineHandle* h, const char* prompt, int max_tokens, char* out_buf, int out_buf_len);
 void engine_destroy_handle(EngineHandle* h);

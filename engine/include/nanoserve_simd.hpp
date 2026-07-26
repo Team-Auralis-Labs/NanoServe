@@ -1,5 +1,7 @@
 #pragma once
+#if !defined(NANOSERVE_WASM) && !defined(__EMSCRIPTEN__)
 #include <immintrin.h>
+#endif
 #include <span>
 #include <cstdint>
 #include <vector>
@@ -106,6 +108,8 @@ inline float fp4_dot_scalar(std::span<const uint8_t> packed, std::span<const flo
 
 namespace detail {
 
+#if defined(__AVX2__)
+
 inline __m256 fp4_nibbles_to_f32(const uint8_t* nibbles, float scale_over_7) {
     alignas(32) int32_t vals[8];
     for (int k = 0; k < 8; ++k) {
@@ -174,6 +178,8 @@ inline float fp4_dot_block32_simd(std::span<const uint8_t> packed, std::span<con
     }
     return acc;
 }
+
+#endif  // __AVX2__
 
 }  // namespace detail
 

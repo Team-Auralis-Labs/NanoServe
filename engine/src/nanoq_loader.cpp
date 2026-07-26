@@ -34,6 +34,79 @@ NanoqDtype parse_dtype(const std::string& s) {
     return NanoqDtype::Int8;
 }
 
+bool read_payload(std::istream& in, NanoqModel& out, std::string& err) {
+    switch (out.dtype) {
+        case NanoqDtype::Int8: {
+            const size_t elements = static_cast<size_t>(out.rows) * static_cast<size_t>(out.cols);
+            out.int8_weights.resize(elements);
+            in.read(reinterpret_cast<char*>(out.int8_weights.data()),
+                    static_cast<std::streamsize>(elements));
+            const size_t scale_count = static_cast<size_t>(out.rows);
+            out.scales.resize(scale_count);
+            in.read(reinterpret_cast<char*>(out.scales.data()),
+                    static_cast<std::streamsize>(scale_count * sizeof(float)));
+            break;
+        }
+        case NanoqDtype::Fp16: {
+            const size_t elements = static_cast<size_t>(out.rows) * static_cast<size_t>(out.cols);
+            out.fp16_weights.resize(elements);
+            in.read(reinterpret_cast<char*>(out.fp16_weights.data()),
+                    static_cast<std::streamsize>(elements * sizeof(uint16_t)));
+            break;
+        }
+        case NanoqDtype::Fp4: {
+            const size_t elements = static_cast<size_t>(out.rows) * static_cast<size_t>(out.cols);
+            const size_t packed = (elements + 1) / 2;
+            out.fp4_packed.resize(packed);
+            in.read(reinterpret_cast<char*>(out.fp4_packed.data()),
+                    static_cast<std::streamsize>(packed));
+            const size_t num_blocks =
+                (elements + static_cast<size_t>(out.block_size) - 1) /
+                static_cast<size_t>(out.block_size);
+            out.scales.resize(num_blocks);
+            in.read(reinterpret_cast<char*>(out.scales.data()),
+                    static_cast<std::streamsize>(num_blocks * sizeof(float)));
+            break;
+        }
+    }
+    if (!in) {
+        err = "truncated payload";
+        return false;
+    }
+    return true;
+}
+
+bool parse_header_and_payload(std::istream& in, NanoqModel& out, std::string& err) {
+    uint32_t header_len = 0;
+    in.read(reinterpret_cast<char*>(&header_len), 4);
+    if (!in || header_len == 0 || header_len > 65536) {
+        err = "invalid header length";
+        return false;
+    }
+
+    std::string header(header_len, '\0');
+    in.read(header.data(), static_cast<std::streamsize>(header_len));
+    if (!in) {
+        err = "truncated header";
+        return false;
+    }
+
+    out = NanoqModel{};
+    out.version = json_int_field(header, "version", 1);
+    out.rows = json_int_field(header, "rows", 0);
+    out.cols = json_int_field(header, "cols", 0);
+    out.block_size = json_int_field(header, "block_size", 32);
+    out.name = json_str_field(header, "name");
+    out.dtype = parse_dtype(json_str_field(header, "dtype"));
+
+    if (out.rows <= 0 || out.cols <= 0) {
+        err = "invalid rows/cols";
+        return false;
+    }
+
+    return read_payload(in, out, err);
+}
+
 }  // namespace
 
 size_t NanoqModel::flat_len() const {
@@ -74,71 +147,15 @@ bool nanoq_load_file(const char* path, NanoqModel& out, std::string& err) {
         err = "cannot open file";
         return false;
     }
+    return parse_header_and_payload(f, out, err);
+}
 
-    uint32_t header_len = 0;
-    f.read(reinterpret_cast<char*>(&header_len), 4);
-    if (!f || header_len == 0 || header_len > 65536) {
-        err = "invalid header length";
+bool nanoq_load_buffer(const uint8_t* data, size_t len, NanoqModel& out, std::string& err) {
+    if (!data || len < 4) {
+        err = "empty buffer";
         return false;
     }
-
-    std::string header(header_len, '\0');
-    f.read(header.data(), header_len);
-    if (!f) {
-        err = "truncated header";
-        return false;
-    }
-
-    out = NanoqModel{};
-    out.version = json_int_field(header, "version", 1);
-    out.rows = json_int_field(header, "rows", 0);
-    out.cols = json_int_field(header, "cols", 0);
-    out.block_size = json_int_field(header, "block_size", 32);
-    out.name = json_str_field(header, "name");
-    out.dtype = parse_dtype(json_str_field(header, "dtype"));
-
-    if (out.rows <= 0 || out.cols <= 0) {
-        err = "invalid rows/cols";
-        return false;
-    }
-
-    const size_t elements = static_cast<size_t>(out.rows) * static_cast<size_t>(out.cols);
-
-    switch (out.dtype) {
-        case NanoqDtype::Int8: {
-            out.int8_weights.resize(elements);
-            f.read(reinterpret_cast<char*>(out.int8_weights.data()),
-                   static_cast<std::streamsize>(elements));
-            const size_t scale_count = static_cast<size_t>(out.rows);
-            out.scales.resize(scale_count);
-            f.read(reinterpret_cast<char*>(out.scales.data()),
-                   static_cast<std::streamsize>(scale_count * sizeof(float)));
-            break;
-        }
-        case NanoqDtype::Fp16: {
-            out.fp16_weights.resize(elements);
-            f.read(reinterpret_cast<char*>(out.fp16_weights.data()),
-                   static_cast<std::streamsize>(elements * sizeof(uint16_t)));
-            break;
-        }
-        case NanoqDtype::Fp4: {
-            const size_t packed = (elements + 1) / 2;
-            out.fp4_packed.resize(packed);
-            f.read(reinterpret_cast<char*>(out.fp4_packed.data()),
-                   static_cast<std::streamsize>(packed));
-            const size_t num_blocks =
-                (elements + static_cast<size_t>(out.block_size) - 1) /
-                static_cast<size_t>(out.block_size);
-            out.scales.resize(num_blocks);
-            f.read(reinterpret_cast<char*>(out.scales.data()),
-                   static_cast<std::streamsize>(num_blocks * sizeof(float)));
-            break;
-        }
-    }
-
-    if (!f) {
-        err = "truncated payload";
-        return false;
-    }
-    return true;
+    std::string blob(reinterpret_cast<const char*>(data), len);
+    std::istringstream in(blob, std::ios::binary);
+    return parse_header_and_payload(in, out, err);
 }

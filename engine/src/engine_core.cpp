@@ -46,6 +46,22 @@ static bool apply_nanoq_model(EngineHandle* h, const char* path, std::string& er
     return true;
 }
 
+static bool apply_nanoq_model_bytes(
+    EngineHandle* h, const uint8_t* data, size_t len, std::string& err) {
+    NanoqModel m;
+    if (!nanoq_load_buffer(data, len, m, err)) return false;
+    h->model = std::move(m);
+    h->has_model = true;
+    h->model_path.clear();
+    h->weights_len = h->model.flat_len();
+    if (h->weights_len == 0) {
+        err = "empty model weights";
+        return false;
+    }
+    h->model_info_json = nanoq_model_info_json(h->model);
+    return true;
+}
+
 static float run_gemv(EngineHandle* h, std::span<const float> acts) {
     if (!h || !h->backend) return 0.0f;
     const size_t n = std::min(h->weights_len, acts.size());
@@ -71,7 +87,9 @@ static float run_gemv(EngineHandle* h, std::span<const float> acts) {
     return 0.0f;
 }
 
-static EngineHandle* engine_create_impl(EngineBackendKind kind, const char* nanoq_path) {
+static EngineHandle* engine_create_impl_bytes(
+    EngineBackendKind kind, const char* nanoq_path,
+    const uint8_t* nanoq_bytes, size_t nanoq_len) {
     auto backend = create_backend(kind);
     if (!backend) return nullptr;
 
@@ -88,7 +106,13 @@ static EngineHandle* engine_create_impl(EngineBackendKind kind, const char* nano
     h->backend = std::move(backend);
 
     std::string err;
-    if (nanoq_path && nanoq_path[0]) {
+    if (nanoq_bytes && nanoq_len > 0) {
+        if (!apply_nanoq_model_bytes(h.get(), nanoq_bytes, nanoq_len, err)) {
+            pool_release(h->weights_pool);
+            pool_release(h->scratch_pool);
+            return nullptr;
+        }
+    } else if (nanoq_path && nanoq_path[0]) {
         if (!apply_nanoq_model(h.get(), nanoq_path, err)) {
             pool_release(h->weights_pool);
             pool_release(h->scratch_pool);
@@ -109,6 +133,10 @@ static EngineHandle* engine_create_impl(EngineBackendKind kind, const char* nano
     return h.release();
 }
 
+static EngineHandle* engine_create_impl(EngineBackendKind kind, const char* nanoq_path) {
+    return engine_create_impl_bytes(kind, nanoq_path, nullptr, 0);
+}
+
 EngineHandle* engine_create(EngineBackendKind kind) {
     return engine_create_impl(kind, nullptr);
 }
@@ -117,10 +145,30 @@ EngineHandle* engine_create_with_model(EngineBackendKind kind, const char* nanoq
     return engine_create_impl(kind, nanoq_path);
 }
 
+EngineHandle* engine_create_with_model_bytes(
+    EngineBackendKind kind, const uint8_t* data, size_t len) {
+    return engine_create_impl_bytes(kind, nullptr, data, len);
+}
+
 int engine_reload_model(EngineHandle* h, const char* nanoq_path) {
     if (!h || !nanoq_path || !nanoq_path[0]) return -1;
     std::string err;
     if (!apply_nanoq_model(h, nanoq_path, err)) return -1;
+
+    PoolBufferView view{};
+    view.weights = h->weights;
+    view.weights_pool = h->weights_pool;
+    view.scratch_pool = h->scratch_pool;
+    view.length = h->weights_len;
+    view.nanoq = &h->model;
+    h->backend->bind_pool_buffers(view);
+    return 0;
+}
+
+int engine_reload_model_bytes(EngineHandle* h, const uint8_t* data, size_t len) {
+    if (!h || !data || len == 0) return -1;
+    std::string err;
+    if (!apply_nanoq_model_bytes(h, data, len, err)) return -1;
 
     PoolBufferView view{};
     view.weights = h->weights;

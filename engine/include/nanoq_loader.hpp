@@ -27,4 +27,5 @@ struct NanoqModel {
 };
 
 bool nanoq_load_file(const char* path, NanoqModel& out, std::string& err);
+bool nanoq_load_buffer(const uint8_t* data, size_t len, NanoqModel& out, std::string& err);
 std::string nanoq_model_info_json(const NanoqModel& m);

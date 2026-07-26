@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="documentation/index.html">Documentation</a> ·
+  <a href="documentation/Quick-deploy-method.md"><strong>Quick deploy</strong></a> ·
   <a href="documentation/SETUP.md">Setup</a> ·
   <a href="documentation/USAGE.md">Usage</a> ·
   <a href="documentation/reports/FULL_TEST_REPORT.md">Test report</a>
@@ -23,6 +24,7 @@
 
 | Area | Highlights |
 |------|------------|
+| **Quick deploy guide** | [documentation/Quick-deploy-method.md](documentation/Quick-deploy-method.md) — setup, startup, and usage for every deployment method (Docker, native, WASM, SDK, Web UI, TUI) |
 | **Web UI** | Frosted-glass panels, animated gradient orbs, live health chips (GPU / models / GGUF) |
 | **Multi-model** | Registry, HuggingFace + URL download, LRU cache, `GET/POST/DELETE /v1/models` |
 | **`.nanoq` v2** | int8, fp16, fp4 weights; safetensors input; C++ loader + SIMD (F16C/AVX2) + CUDA kernels |
@@ -30,8 +32,9 @@
 | **Quantizer** | CLI + pipeline auto-convert with fp16/fp4; `precision=raw` skips quantize (with warning) |
 | **Clients** | SDK, Web UI, and TUI parity for model, format, precision, and download |
 | **Docker** | Default CPU image unchanged; optional `--profile gpu` (8001) and `--profile gguf` (8002) |
+| **Browser WASM** | Optional fourth tier — `./scripts/build_wasm.sh` + `npx serve deployment/wasm` |
 
-**40 automated tests** across 8 suites (15 in the core integration suite).
+**48 automated tests** across 10 suites (15 in the core integration suite; Emscripten build test skipped when `emcc` absent).
 
 ---
 
@@ -137,6 +140,8 @@ sequenceDiagram
 
 ## Quick start
 
+**Full guide for every method:** [documentation/Quick-deploy-method.md](documentation/Quick-deploy-method.md) — Docker (CPU / GPU / GGUF), native dev & production, browser WASM, Python SDK, Web UI, and TUI.
+
 ### Docker
 
 ```bash
@@ -160,12 +165,27 @@ source .venv/bin/activate && source .env.nanoserve
 ./scripts/run_native_300.sh                      # production / 300 users
 ```
 
+### Browser WASM (demo — no Python server)
+
+**Guides:** [Quick deploy — WASM](documentation/Quick-deploy-method.md#7-browser-wasm-demo) · [documentation/WASM.md](documentation/WASM.md)
+
+Requires [Emscripten](https://emscripten.org/). CPU-only `.nanoq` inference in-tab; not for production.
+
+```bash
+source /path/to/emsdk/emsdk_env.sh             # emcc on PATH
+./scripts/build_wasm.sh                          # or: npm run build:wasm
+npx serve deployment/wasm                        # or: npm run serve:wasm
+```
+
+Open the URL printed by `serve` → load a `.nanoq` file → Generate.
+
 ---
 
 ## How to use
 
 | Task | Command / link |
 |------|----------------|
+| **Quick deploy (all methods)** | [documentation/Quick-deploy-method.md](documentation/Quick-deploy-method.md) |
 | Full guide | [documentation/USAGE.md](documentation/USAGE.md) |
 | Web UI | http://localhost:8000 |
 | Health | `curl -s localhost:8000/health \| jq .` |
@@ -175,6 +195,7 @@ source .venv/bin/activate && source .env.nanoserve
 | Python SDK | `python examples/sdk_demo.py` |
 | TUI | `python tui/client.py --device auto --model my-model` |
 | Load test | `python3 tests/load_test_report.py --preset 300` |
+| **Browser WASM demo** | [documentation/WASM.md](documentation/WASM.md) — `./scripts/build_wasm.sh` |
 
 ```bash
 curl -X POST http://localhost:8000/v1/completions \
@@ -252,6 +273,22 @@ Missing the `[gguf]` extra → native fallback with a warning (tested in `tests/
 
 ---
 
+## Browser WASM demo (optional)
+
+Static-host **fourth tier** — try NanoServe in the browser without FastAPI or Docker.
+
+| | |
+|--|--|
+| **Build** | `./scripts/build_wasm.sh` |
+| **Serve** | `npx serve deployment/wasm` |
+| **Docs** | [documentation/WASM.md](documentation/WASM.md) |
+| **Tests** | `python3 tests/test_wasm_native.py` · `python3 tests/test_wasm.py` |
+
+Keeps: frosted-glass UI, `.nanoq` v2 (int8/fp16/fp4), CPU GEMV demo.  
+Defers: API batcher, multi-model registry, CUDA/GGUF, 300-user scaling.
+
+---
+
 ## Scaling (non-Docker)
 
 | Tier | Users | Command |
@@ -279,7 +316,9 @@ python3 tests/test_suite.py          # 15 integration tests
 python3 tests/test_gguf.py           # GGUF routing (no llama required)
 python3 tests/test_nanoq_loader.py   # .nanoq v2 loader
 python3 tests/test_simd_parity.py    # fp16/fp4 SIMD parity
-# … 40 tests total across tests/test_*.py
+python3 tests/test_wasm_native.py    # buffer FFI for WASM path
+python3 tests/test_wasm.py           # WASM bundle + optional emcc build
+# … 48 tests total across tests/test_*.py
 ```
 
 Regenerate docs: `python3 scripts/generate_reports.py`
@@ -313,8 +352,10 @@ server/
   static/          Web UI (HTML, CSS animations, JS)
 tui/               Terminal client + load tester
 scripts/           install, production serve, reports
-documentation/     Setup, usage, assets, reports (MD/HTML/PDF)
-deployment/        nginx config for 300-user native tier
+documentation/     Quick deploy, setup, usage, WASM, assets, reports (MD/HTML/PDF)
+deployment/
+  nginx.conf       300-user native tier
+  wasm/            Browser demo (static + optional .wasm build)
 ```
 
 ---
@@ -330,7 +371,8 @@ deployment/        nginx config for 300-user native tier
 cd engine/build && cmake .. -DNANOSERVE_ENABLE_CUDA=ON && make -j$(nproc)
 ```
 
-Optional Python extras: `[server]`, `[models]`, `[gguf]`
+Optional Python extras: `[server]`, `[models]`, `[gguf]`  
+Optional browser tier: `./scripts/build_wasm.sh` (requires Emscripten)
 
 ---
 

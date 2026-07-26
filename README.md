@@ -31,14 +31,11 @@
 | **Add models** | [documentation/How-to-add-models-doc.md](documentation/How-to-add-models-doc.md) — download, register, and use models via Web UI, API, SDK, and TUI |
 | **Quick GGUF test** | [documentation/Quick-test-GGUF.md](documentation/Quick-test-GGUF.md) — try tiny real AI models (distilgpt2, SmolLM) via Web, TUI, and phone on Wi‑Fi |
 | **LAN & mesh** | [documentation/connect-network.md](documentation/connect-network.md) — phones, laptops, TUI, and multi-host mesh on one network |
-| **Web UI** | Frosted-glass panels, animated gradient orbs, live health chips (GPU / models / GGUF) |
-| **Multi-model** | Registry, HuggingFace + URL download, LRU cache, `GET/POST/DELETE /v1/models` |
-| **`.nanoq` v2** | int8, fp16, fp4 weights; safetensors input; C++ loader + SIMD (F16C/AVX2) + CUDA kernels |
-| **Inference router** | `format=auto\|nanoq\|gguf` routes to native engine or optional llama-cpp-python |
-| **Quantizer** | CLI + pipeline auto-convert with fp16/fp4; `precision=raw` skips quantize (with warning) |
-| **Clients** | SDK, Web UI, and TUI parity for model, format, precision, and download |
-| **Docker** | Default CPU image unchanged; optional `--profile gpu` (8001) and `--profile gguf` (8002) |
-| **Browser WASM** | Optional fourth tier — `./scripts/build_wasm.sh` + `npx serve deployment/wasm` |
+| **Web UI** | Frosted-glass panels, animated gradient orbs, live health chips (GPU / models / GGUF); **health-aware** model/format controls |
+| **Docker** | CPU `:8000`, GPU `:8001`, GGUF `:8002`; `.dockerignore` + build fixes; user-chosen models (no baked-in default) |
+| **Deployment audit** | `scripts/audit_deployments.sh` · `scripts/simulate_tui.py` — smoke-test all Docker profiles |
+| **Multi-model** | Registry, HF/URL download, LRU cache; GGUF files in `models/` auto-discovered on startup |
+| **Browser WASM** | Optional fourth tier — `./scripts/build_wasm.sh` + `npx serve deployment/wasm`; load `.nanoq` before Generate |
 
 **48 automated tests** across 10 suites (15 in the core integration suite; Emscripten build test skipped when `emcc` absent).
 
@@ -55,10 +52,12 @@ Open **http://localhost:8000** after starting the server.
 | Control | Options |
 |---------|---------|
 | **Compute engine** | CPU · GPU · Auto |
-| **Model** | Default or any registered model |
-| **Format** | Auto · Native (`.nanoq`) · GGUF |
+| **Model** | **Built-in demo (no model)** on `:8000` CPU — or **Select model…** on `:8002` GGUF / when models registered |
+| **Format** | Auto · Native (`.nanoq`) · GGUF (disabled on CPU-only servers) |
 | **Precision** | int8 (default) · fp16 · fp4 · raw |
 | **Download model** | HuggingFace repo or direct URL |
+
+**Built-in demo (`:8000`, no model):** synthetic engine output only — fixed vocabulary about the inference pipeline, **not** real AI. For real LLM text use **Docker GGUF** on `:8002` and select a model from the dropdown.
 
 **Visual design**
 
@@ -226,9 +225,16 @@ print(engine.list_models())
 ### TUI commands
 
 ```
-/model [id|path]              /format auto|nanoq|gguf
+/model [id|path]              /format auto|nanoq|gguf   # /model required for GGUF
 /precision int8|fp16|fp4|raw    /models
 /download hf <repo> [file]      /download url <url>
+```
+
+**Deployment smoke tests:**
+
+```bash
+bash scripts/audit_deployments.sh              # Docker CPU/GPU/GGUF + WASM static checks
+python3 scripts/simulate_tui.py http://localhost:8002 --expect-gguf
 ```
 
 ---
@@ -265,14 +271,16 @@ Real LLM output via **llama-cpp-python** — opt-in; default install has zero ne
 
 ```bash
 mkdir -p models
-# Download distilgpt2-Q2_K.gguf into models/ (see Quick-test-GGUF.md)
-export NANOSERVE_MODEL_PATH=/models/distilgpt2-Q2_K.gguf
+# Download a .gguf into models/ (see Quick-test-GGUF.md)
 docker compose --profile gguf up --build   # → http://localhost:8002
 ```
 
+On `:8002`, `.gguf` files in `./models/` are **auto-registered** at startup. Select the model in the Web UI, TUI (`/model <id>`), or API (`"model": "distilgpt2-Q2_K"`). **Format must be GGUF** for real LLM output.
+
 | Env | Default | Purpose |
 |-----|---------|---------|
-| `NANOSERVE_MODEL_PATH` | — | Default `.gguf` or `.nanoq` path |
+| `NANOSERVE_MODELS_DIR` | `/models` in GGUF Docker | Registry root; place `.gguf` files here |
+| `NANOSERVE_MODEL_PATH` | unset | Optional fallback when `model` omitted (not set in compose) |
 | `NANOSERVE_DEFAULT_FORMAT` | `auto` | Default runtime when format omitted |
 | `NANOSERVE_GGUF_N_CTX` | 2048 | Context window |
 | `NANOSERVE_GGUF_N_GPU_LAYERS` | 0 | GPU layers when `device=gpu\|auto` |
@@ -295,7 +303,7 @@ Static-host **fourth tier** — try NanoServe in the browser without FastAPI or 
 | **Docs** | [documentation/WASM.md](documentation/WASM.md) |
 | **Tests** | `python3 tests/test_wasm_native.py` · `python3 tests/test_wasm.py` |
 
-Keeps: frosted-glass UI, `.nanoq` v2 (int8/fp16/fp4), CPU GEMV demo.  
+Keeps: frosted-glass UI, `.nanoq` v2 (int8/fp16/fp4), CPU GEMV demo. **Load a `.nanoq` file before Generate.**  
 Defers: API batcher, multi-model registry, CUDA/GGUF, 300-user scaling.
 
 ---
@@ -362,7 +370,8 @@ nanoserve/
 server/
   static/          Web UI (HTML, CSS animations, JS)
 tui/               Terminal client + load tester
-scripts/           install, production serve, reports
+scripts/           install, production serve, audit_deployments.sh, simulate_tui.py
+.dockerignore      Excludes host build artifacts from Docker context
 documentation/     Quick deploy, setup, usage, WASM, assets, reports (MD/HTML/PDF)
 deployment/
   nginx.conf       300-user native tier

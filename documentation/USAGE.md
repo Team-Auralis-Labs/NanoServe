@@ -21,7 +21,7 @@ Open **http://localhost:8000** for the Web UI.
 
 1. Enter a prompt in the text box.
 2. Choose **Compute Engine**: CPU, GPU, or Auto.
-3. Select **Model** (or Default), **Format** (Auto / Native / GGUF), and **Precision** (int8 default, fp16, fp4, raw).
+3. Select **Model** (**Built-in demo** on CPU `:8000`, or **Select model…** on GGUF `:8002`), **Format** (Auto / Native / GGUF), and **Precision** (int8 default, fp16, fp4, raw).
 4. Use **Download model** for HuggingFace repo or direct URL.
 5. Click **Generate** — response shows tokens, model, format, and device.
 

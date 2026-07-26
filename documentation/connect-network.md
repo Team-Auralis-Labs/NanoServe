@@ -72,9 +72,12 @@ Docker publishes `0.0.0.0:8000→8000` by default — no extra Docker networking
 1. Start the server on the host (`docker compose up` or `./scripts/run_native.sh`).
 2. On the client device, open a browser:
    ```
-   http://<HOST-IP>:8000
+   http://<HOST-IP>:8000    # CPU built-in demo
+   http://<HOST-IP>:8002    # GGUF — select model + Format GGUF
    ```
 3. Use the UI as on localhost — prompt, model, format, Generate.
+
+**GGUF from phone:** use port **8002**, select your model in the dropdown, set **Format → GGUF**, then Generate. Port 8000 alone is the synthetic demo only.
 
 The Web UI calls relative paths (`/health`, `/v1/completions`), so it works with any reachable IP. No app install needed on mobile.
 

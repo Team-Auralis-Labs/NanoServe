@@ -59,7 +59,7 @@ Open **http://localhost:3000** (or the port `serve` prints).
 
 1. Wait for **WASM ready** status chip.
 2. Click **Load .nanoq file** or use the bundled `demo.nanoq` if built.
-3. Enter a prompt and click **Generate**.
+3. Enter a prompt and click **Generate** — **requires a loaded model first**.
 
 ---
 
@@ -110,6 +110,7 @@ python3 tests/test_wasm.py
 |-------|-----|
 | `emcc not found` | `source /path/to/emsdk/emsdk_env.sh` |
 | WASM load failed in browser | Run `./scripts/build_wasm.sh` first |
+| Generate without model | Click **Load .nanoq file** first — UI blocks empty generate |
 | Styles missing | Serve via HTTP (`npx serve`), not `file://` |
 | Model too large | Use smaller `.nanoq` or raise cap in `nanoserve.js` |
 

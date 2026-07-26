@@ -109,3 +109,17 @@ export PYTHONPATH="$PWD:$PYTHONPATH"
 - TLS certificates (terminate TLS at nginx or a reverse proxy)
 
 See [SETUP.md](SETUP.md) and [USAGE.md](USAGE.md) for step-by-step setup and daily use.
+
+## Docker deployment (separate from `./install.sh`)
+
+| Requirement | Purpose |
+|-------------|---------|
+| Docker 20+ | Build and run CPU / GPU / GGUF profiles |
+| NVIDIA Container Toolkit | Required for `docker compose --profile gpu` GPU passthrough at runtime |
+| Host `./models/` directory | User-provided `.gguf` files for GGUF profile (no default model in compose) |
+
+**Ports:** CPU **8000** (built-in demo) · GPU **8001** · GGUF **8002** (select model in UI).
+
+**Build notes:** Repository includes `.dockerignore` (excludes `engine/build/`, `allocator/target/`). Do not remove — host CMake/Rust caches break in-container builds without it.
+
+Full guide: [Quick-deploy-method.md](Quick-deploy-method.md) · Smoke test: `bash scripts/audit_deployments.sh`

@@ -146,19 +146,19 @@ The file ends up at `models/distilgpt2-Q2_K.gguf`.
 
 ---
 
-### Match the filename to Docker
+### After download — how Docker finds your model
 
-When you start the server, `NANOSERVE_MODEL_PATH` must use the **exact name** of the file you downloaded:
+Place the file in `NanoServe/models/`. When you start GGUF Docker, the server sets `NANOSERVE_MODELS_DIR=/models` and **auto-registers** every `.gguf` in that folder at startup.
 
-| If you downloaded… | Use this export |
-|------------------|-----------------|
-| `distilgpt2-Q2_K.gguf` | `export NANOSERVE_MODEL_PATH=/models/distilgpt2-Q2_K.gguf` |
-| `SmolLM-135M-Q2_K.gguf` | `export NANOSERVE_MODEL_PATH=/models/SmolLM-135M-Q2_K.gguf` |
+You **select the model** in:
 
-Docker maps your laptop folder `./models` → `/models` inside the container.  
-So `/models/...` in the export = file inside your `NanoServe/models/` folder.
+- **Web UI** → Model dropdown (e.g. `distilgpt2-Q2_K`)
+- **TUI** → `/model distilgpt2-Q2_K`
+- **API** → `"model": "distilgpt2-Q2_K"`
 
-**Do not** use the Web UI “Download model” button for GGUF in this guide — that path is for other weight types. For GGUF, you download the `.gguf` file yourself (ways A–C above), then start Docker.
+No `NANOSERVE_MODEL_PATH` export is required (optional advanced fallback only).
+
+**Do not** use the Web UI “Download model” button for GGUF in this guide — that path is for safetensors → `.nanoq`. For GGUF, download the `.gguf` file yourself (ways A–C above), then start Docker.
 
 ---
 
@@ -170,34 +170,40 @@ Open a terminal in the NanoServe folder:
 mkdir -p models
 # (download .gguf into models/ first — see "How to download" above)
 
-export NANOSERVE_MODEL_PATH=/models/distilgpt2-Q2_K.gguf
 docker compose --profile gguf up --build
 ```
 
-Wait until it says the server is running. Open in your browser:
+Wait until the server is running. Open in your browser:
 
 **http://localhost:8002**
 
-(Port **8002** = GGUF Docker. Normal CPU Docker uses **8000**.)
+(Port **8002** = GGUF Docker. Normal CPU Docker uses **8000** — built-in demo only, not real AI.)
+
+**In the Web UI:**
+
+1. **Model** → select your file (e.g. `distilgpt2-Q2_K`)
+2. **Format** → **GGUF**
+3. Prompt → **Generate**
 
 **Check it worked:**
 
 ```bash
-curl -s http://localhost:8002/health | jq '.gguf_available, .gguf_model_loaded'
+curl -s http://localhost:8002/health | jq '.gguf_available, .models_registered'
+curl -s http://localhost:8002/v1/models | jq .
 ```
 
-You want `true` for both (after first generate, model loads).
+You want `gguf_available: true` and your model listed. After first generate, `gguf_model_loaded` becomes `true`.
 
 ### Native install (no Docker)
 
 ```bash
 ENABLE_GGUF=1 ./install.sh
-export NANOSERVE_MODEL_PATH=/path/to/distilgpt2-Q2_K.gguf
 source .venv/bin/activate && source .env.nanoserve
+# Copy .gguf into ~/.nanoserve/models/ or set NANOSERVE_MODELS_DIR
 ./scripts/run_native.sh
 ```
 
-Then use **http://localhost:8000** instead of 8002.
+Then use **http://localhost:8000** — select model in Web UI or `/model` in TUI.
 
 ---
 
@@ -229,8 +235,8 @@ CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python --force-reinstall --no
 ### 2. Point at your model and turn on GPU layers
 
 ```bash
-export NANOSERVE_MODEL_PATH="$PWD/models/distilgpt2-Q2_K.gguf"
 export NANOSERVE_GGUF_N_GPU_LAYERS=99
+# Select model in Web UI or: export NANOSERVE_MODEL_PATH="$PWD/models/distilgpt2-Q2_K.gguf"
 ```
 
 - **`99`** = “offload as many layers as possible to the GPU” (fine for tiny models).  
@@ -314,14 +320,15 @@ So the quick-test Docker path stays **CPU**. For a GPU GGUF quick test, use **na
 ---
 
 1. Open **http://localhost:8002** (Docker) or **http://localhost:8000** (native)
-2. **Format** → pick **GGUF**
-3. **Compute engine** → **CPU** (Docker / easiest) or **GPU** (native + [GPU setup](#optional--gpu-quick-test-nvidia-native) above)
-4. Type a short prompt, e.g. `Hello, how are you?`
-5. Click **Generate**
+2. **Model** → select your `.gguf` (required)
+3. **Format** → **GGUF**
+4. **Compute engine** → **CPU** (Docker / easiest) or **GPU** (native + [GPU setup](#optional--gpu-quick-test-nvidia-native) above)
+5. Type a short prompt, e.g. `Hello, how are you?`
+6. Click **Generate**
 
-You should get **real AI text** (may be silly — these models are tiny).
+You should get **real AI text** (may be weak or silly — these models are tiny and Q2_K is heavily quantized).
 
-If you see the old demo words (“the model is fast and efficient…”), you forgot **Format = GGUF**.
+If you see demo words (“the model is fast and efficient…”), you are on **port 8000 CPU demo** — switch to **8002** and **Format = GGUF** with a model selected.
 
 ---
 
@@ -331,15 +338,15 @@ On the **same computer** as the server:
 
 ```bash
 pip install httpx rich
-python tui/client.py http://127.0.0.1:8002 --format gguf --device cpu
+python tui/client.py http://127.0.0.1:8002 --format gguf --device cpu --model distilgpt2-Q2_K
 ```
 
-Type a message and press Enter. Try slash commands:
+Or mid-chat:
 
 ```
+/model distilgpt2-Q2_K
 /format gguf
 /device cpu
-/help
 ```
 
 ---
@@ -411,8 +418,14 @@ python tui/client.py http://192.168.1.42:8002 --format gguf --device cpu
 ```python
 import httpx
 r = httpx.post(
-    "http://192.168.1.42:8002/v1/completions",
-    json={"prompt": "Hi from another laptop", "max_tokens": 24, "format": "gguf"},
+    "http://127.0.0.1:8002/v1/completions",
+    json={
+        "prompt": "Hi from another laptop",
+        "max_tokens": 24,
+        "format": "gguf",
+        "device": "cpu",
+        "model": "distilgpt2-Q2_K",  # required
+    },
     timeout=120.0,
 )
 print(r.json()["text"])
@@ -438,43 +451,36 @@ Phones cannot run the TUI (needs Python in a terminal). Use the **browser** on p
 
 | Problem | Fix |
 |---------|-----|
-| “GGUF off” in Web UI | Use port **8002** and `--profile gguf` |
-| Still fake demo text | Set **Format → GGUF** |
-| `gguf_model_loaded: false` | Check `NANOSERVE_MODEL_PATH` points to your file inside `/models/` |
+| “GGUF off” or GGUF disabled in Web UI | Use port **8002** and `--profile gguf` |
+| Still fake demo text | Wrong port (`8000`) or Format not **GGUF** — use **8002** + select model |
+| “Select model for GGUF inference” | Pick model in dropdown, TUI `/model`, or API `"model"` field |
+| `gguf_model_loaded: false` | Normal before first request; ensure model selected and `format=gguf` |
+| Model not in dropdown | `ls models/*.gguf`; restart container; check `GET /v1/models` |
 | Phone can’t connect | Same Wi‑Fi; use host IP not `localhost`; open firewall port 8002 |
 | Download stuck or tiny file | Re-download; real file should be ~61 MB or ~88 MB, not a few KB |
-| Wrong filename in Docker | `ls models/` and match `NANOSERVE_MODEL_PATH` exactly |
 | Download failed in Web UI | Use browser/curl/CLI above — GGUF is not the Web “Download model” button |
 | Very slow | Normal on CPU for first run — model loads once |
+| Blank or nonsense GGUF output | Expected for tiny Q2_K base models; use instruct models + higher quant for Q&A |
 | Picked GPU but still CPU | Native only: reinstall `llama-cpp-python` with `CMAKE_ARGS=-DLLAMA_CUDA=on`; set `NANOSERVE_GGUF_N_GPU_LAYERS=99` |
-| GPU warning in response | `N_GPU_LAYERS=0` — export `NANOSERVE_GGUF_N_GPU_LAYERS=99` and restart server |
 | GPU on Docker 8002 | Stock GGUF Docker is CPU-only — use [native GPU section](#optional--gpu-quick-test-nvidia-native) |
+| Docker build fails (CMake cache) | Pull latest; `.dockerignore` excludes host `engine/build/`; rebuild |
 
 ---
 
 ## Cheat sheet
 
 ```bash
-# 1. Download .gguf into ./models/  (browser, curl, or huggingface-cli — see above)
+# 1. Download .gguf into ./models/
 # 2. Start
-export NANOSERVE_MODEL_PATH=/models/distilgpt2-Q2_K.gguf
 docker compose --profile gguf up --build
 
 # 3. This computer
-#    Web → http://localhost:8002  (Format: GGUF)
-#    TUI → python tui/client.py http://127.0.0.1:8002 --format gguf
+#    Web → http://localhost:8002  (select Model + Format: GGUF)
+#    TUI → python tui/client.py http://127.0.0.1:8002 --format gguf --model distilgpt2-Q2_K
 
 # 4. Other devices (replace IP)
 #    Web → http://192.168.1.42:8002
-#    TUI → python tui/client.py http://192.168.1.42:8002 --format gguf
-
-# --- Optional GPU (native, not Docker 8002) ---
-# CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
-# export NANOSERVE_GGUF_N_GPU_LAYERS=99
-# export NANOSERVE_MODEL_PATH=$PWD/models/distilgpt2-Q2_K.gguf
-# ./scripts/run_native.sh
-# Web → Format GGUF, Compute engine GPU
-# TUI → python tui/client.py http://127.0.0.1:8000 --format gguf --device gpu
+#    TUI → python tui/client.py http://192.168.1.42:8002 --format gguf --model distilgpt2-Q2_K
 ```
 
 ---

@@ -23,6 +23,8 @@ One-page setup, startup, and usage for **every** way to run NanoServe.
 
 **Use when:** You want a self-contained demo with no host toolchain.
 
+**Important:** Port **8000** runs the **built-in synthetic demo** — not a real LLM. Output uses a fixed engine vocabulary (“quantized inference buddy allocator…”). For real AI, use [Docker GGUF](#3-docker-gguf-profile) on port **8002**.
+
 ### Prerequisites
 
 - Docker 20+
@@ -37,6 +39,8 @@ docker compose up --build
 
 First run builds the CPU image (`runtime-cpu`) and starts `nanoserve` on port **8000**.
 
+**Build hygiene:** A `.dockerignore` excludes host `engine/build/`, `allocator/target/`, and venvs so CMake/Rust caches do not break in-container builds. The Dockerfile sets `PYTHONPATH=/app` so the server starts correctly.
+
 ### Startup
 
 ```bash
@@ -50,7 +54,7 @@ docker compose logs -f         # logs
 
 | Task | Command |
 |------|---------|
-| Web UI | Open http://localhost:8000 |
+| Web UI | Open http://localhost:8000 — **Model: Built-in demo (no model)**; **Format: Auto** |
 | Health | `curl -s localhost:8000/health \| jq .` |
 | Completions | See [HTTP API snippet](#http-api-quick-reference) below |
 | List models | `curl -s localhost:8000/v1/models \| jq .` |
@@ -65,7 +69,7 @@ docker compose down
 
 ## 2. Docker GPU (profile)
 
-**Use when:** You have NVIDIA GPU + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
+**Use when:** You have NVIDIA GPU + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) installed and Docker configured for `--gpus`.
 
 ### Setup & startup
 
@@ -75,9 +79,11 @@ docker compose --profile gpu up --build
 
 Service `nanoserve-gpu` listens on **http://localhost:8001** (maps container 8000 → host 8001).
 
+**Build notes:** The GPU image uses `nvidia/cuda:12.4.1-devel` for compilation. `engine/nvcc_wrapper.sh` resolves `nvcc` under `/usr/local/cuda` or `/usr/lib/cuda`. If compose fails with `could not select device driver "nvidia"`, install the Container Toolkit — the image may still build without it.
+
 ### Usage
 
-Same API and Web UI as CPU; set `"device": "gpu"` or `"device": "auto"` in completions.
+Same API and Web UI as CPU; set `"device": "gpu"` or `"device": "auto"` in completions. Web UI shows **Built-in demo (no model)** unless you add registered models.
 
 ```bash
 curl -s localhost:8001/health | jq '.gpu_cuda, .gpu_available'
@@ -97,30 +103,37 @@ docker compose --profile gpu down
 
 ### Prerequisites
 
-- A `.gguf` model file on the host
-- Optional: mount directory with models
+- A `.gguf` model file in `./models/` on the host (user-provided — **no default model in compose**)
 
 ### Setup
 
 ```bash
-# Place model(s) in ./models/ or set NANOSERVE_GGUF_MODEL_DIR
-export NANOSERVE_GGUF_MODEL_DIR=/path/to/gguf/models
-export NANOSERVE_MODEL_PATH=/models/your-model.gguf   # inside container
+mkdir -p models
+# Download or copy your-model.gguf into ./models/
 
 docker compose --profile gguf up --build
 ```
 
-GGUF service runs on **http://localhost:8002**. Default volume: `./models:/models:ro`.
+GGUF service runs on **http://localhost:8002**. Volume: `./models:/models` (read-write — registry writes `registry.json` here).  
+Environment: `NANOSERVE_MODELS_DIR=/models` — `.gguf` files are **auto-registered** at startup.
 
 ### Usage
 
+1. Open http://localhost:8002
+2. **Model** dropdown → select your model (e.g. `distilgpt2-Q2_K`)
+3. **Format** → **GGUF**
+4. **Generate**
+
 ```bash
+curl -s http://localhost:8002/v1/models | jq .
 curl -X POST http://localhost:8002/v1/completions \
   -H 'Content-Type: application/json' \
-  -d '{"prompt":"Hello","max_tokens":32,"format":"gguf","device":"cpu"}'
+  -d '{"prompt":"Hello","max_tokens":32,"format":"gguf","device":"cpu","model":"distilgpt2-Q2_K"}'
 ```
 
-Web UI: open http://localhost:8002 → set **Format** to **GGUF**.
+**Required:** pass `"model"` for GGUF (Web UI, TUI `/model`, or API). Omitting model returns HTTP 400.
+
+Optional override: `export NANOSERVE_MODEL_PATH=/models/your.gguf` before compose (advanced — not set by default).
 
 ### Stop
 
@@ -223,7 +236,8 @@ ENABLE_CUDA=1 ./install.sh
 
 # GGUF for real LLM output
 ENABLE_GGUF=1 ./install.sh
-export NANOSERVE_MODEL_PATH=/path/to/model.gguf
+# Pick model via Web UI / TUI /model / API — optional:
+# export NANOSERVE_MODEL_PATH=/path/to/model.gguf
 
 # All optional features
 ENABLE_CUDA=1 ENABLE_GGUF=1 ./install.sh
@@ -245,12 +259,13 @@ source .venv/bin/activate && source .env.nanoserve
 ```bash
 curl -X POST http://localhost:8000/v1/completions \
   -H 'Content-Type: application/json' \
-  -d '{"prompt":"Hello","max_tokens":16,"format":"gguf","device":"cpu"}'
+  -d '{"prompt":"Hello","max_tokens":16,"format":"gguf","device":"cpu","model":"my-model-id"}'
 ```
 
 | Env var | Default | Purpose |
 |---------|---------|---------|
-| `NANOSERVE_MODEL_PATH` | — | Default `.gguf` or `.nanoq` path |
+| `NANOSERVE_MODELS_DIR` | `~/.nanoserve/models` | Registry root; drop `.gguf` here for auto-discovery |
+| `NANOSERVE_MODEL_PATH` | unset | Optional fallback when `model` omitted |
 | `NANOSERVE_GGUF_N_CTX` | 2048 | Context window |
 | `NANOSERVE_GGUF_N_GPU_LAYERS` | 0 | GPU layers when `device=gpu\|auto` |
 | `NANOSERVE_GGUF_N_BATCH` | 512 | Batch size |
@@ -290,6 +305,8 @@ Open the URL printed (typically http://localhost:3000).
 1. Wait for **WASM ready** status chip.
 2. **Load .nanoq file** (or use bundled `assets/demo.nanoq` if built).
 3. Enter prompt → **Generate** → see latency meta tags.
+
+**Generate is blocked until a model is loaded** — you must click **Load .nanoq file** first.
 
 **JS API (browser console or embed):**
 
@@ -373,15 +390,15 @@ Start any server method that exposes FastAPI on port 8000 (or 8001/8002 for Dock
 
 ### Usage
 
-1. Open **http://localhost:8000** (adjust port for GPU/GGUF Docker).
+1. Open **http://localhost:8000** (adjust port: GPU **8001**, GGUF **8002**).
 2. **Compute engine:** CPU · GPU · Auto
-3. **Model:** Default or registered model
-4. **Format:** Auto · Native (`.nanoq`) · GGUF
+3. **Model:** **Built-in demo (no model)** on CPU `:8000` — or **Select model…** on GGUF `:8002` / when models exist
+4. **Format:** Auto · Native (`.nanoq`) · GGUF (disabled when `/health` reports `gguf_available: false`)
 5. **Precision:** int8 · fp16 · fp4 · raw
 6. **Download model:** HuggingFace repo or URL
 7. Click **Generate**
 
-Live status chips poll `/health` for online state, GPU, model count, and GGUF availability.
+Live status chips poll `/health` for online state, GPU, model count, and GGUF availability. The UI adapts labels and disables GGUF on CPU-only servers.
 
 Static assets: `server/static/` (`index.html`, `styles.css`, `app.js`).
 
@@ -506,11 +523,18 @@ flowchart TD
 | Issue | Fix |
 |-------|-----|
 | `libnanoserve_engine.so: cannot open` | `source .env.nanoserve` |
+| `ModuleNotFoundError: No module named 'server'` in Docker | Fixed in current Dockerfile (`PYTHONPATH=/app`); rebuild image |
+| CMake `CMakeCache.txt` path mismatch in Docker build | Fixed: `.dockerignore` + `rm -rf engine/build` before cmake; rebuild |
 | Web UI unstyled | Use http://localhost:8000/ (redirects to `/static/index.html`) |
-| GPU not detected | Check `/health`; rebuild with `ENABLE_CUDA=1` or Docker GPU profile |
-| GGUF format fails | `ENABLE_GGUF=1 ./install.sh` or Docker `--profile gguf`; set `NANOSERVE_MODEL_PATH` |
+| “Select model for GGUF” on `:8000` | Use `:8002` with `--profile gguf`, or set Format to **Auto** on CPU demo |
+| Fake demo words on `:8000` | Expected — built-in demo; use `:8002` + GGUF + selected model for real AI |
+| GPU not detected | Check `/health`; NVIDIA Container Toolkit for compose GPU profile |
+| GPU compose: `could not select device driver nvidia` | Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) |
+| GGUF format fails | Docker `--profile gguf`; select model in UI/API (`model` field required) |
 | WASM build fails | `source emsdk/emsdk_env.sh`; see [WASM.md](WASM.md) |
+| WASM Generate error | Load a `.nanoq` file first |
 | Port in use | Change `PORT=8001 ./scripts/run_native.sh` or stop conflicting service |
+| Verify all profiles | `bash scripts/audit_deployments.sh` |
 
 Full troubleshooting: [SETUP.md#troubleshooting](SETUP.md)
 

@@ -8,11 +8,13 @@ Register, download, quantize, and use models via **Web UI**, **HTTP API**, **Pyt
 
 ## Default behavior (no model)
 
-Fresh `docker compose up` or `./install.sh` + server start ships **no real LLM weights**. With **Model = Default** (or omitting `model` in API/SDK):
+Fresh `docker compose up` (`:8000`) or `./install.sh` + server start ships **no real LLM weights**. With **Model = Built-in demo (no model)** (or omitting `model` in API/SDK on CPU):
 
-- The C++ engine uses **synthetic demo weights** (1024 int8 values + fixed 23-word vocabulary)
-- Output is deterministic demo text — **not** real LLM inference
-- `/health` shows `models_registered: 0`
+- The C++ engine uses **synthetic demo weights** (1024 int8 values + fixed 22-word vocabulary)
+- Output is deterministic demo text about the inference pipeline — **not** real LLM inference
+- `/health` shows `models_registered: 0`, `gguf_available: false` on CPU Docker
+
+**Docker GGUF (`:8002`):** drop `.gguf` files in `./models/` — auto-registered at startup. **You must select a model** in Web UI, TUI, or API for `format=gguf`.
 
 Add a model using any method below to run real `.nanoq` or `.gguf` weights.
 
@@ -33,10 +35,8 @@ Add a model using any method below to run real `.nanoq` or `.gguf` weights.
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `NANOSERVE_MODELS_DIR` | `~/.nanoserve/models` | Download + registry root |
-| Registry manifest | `$NANOSERVE_MODELS_DIR/registry.json` | Model IDs and metadata |
-| Per-model dir | `$NANOSERVE_MODELS_DIR/<model-id>/` | Source + generated `.nanoq` |
-| `NANOSERVE_MODEL_PATH` | unset | Default path when `model` omitted (`.nanoq` or `.gguf`) |
+| `NANOSERVE_MODELS_DIR` | `~/.nanoserve/models` (Docker GGUF: `/models`) | Registry root; `.gguf` in this dir auto-register on startup |
+| `NANOSERVE_MODEL_PATH` | unset | Optional fallback when `model` omitted — **not set in docker-compose** |
 
 **Auto-quantize:** `NANOSERVE_AUTO_QUANTIZE=1` (default) converts safetensors → int8 `.nanoq` on first use.
 
@@ -63,15 +63,16 @@ Default CPU image installs `[server]` only. For HuggingFace download inside the 
 docker compose exec nanoserve pip install "nanoserve[models]"
 ```
 
-For GGUF profile, mount models and set path:
+For **GGUF Docker profile** (`--profile gguf`, port **8002**), compose already sets:
 
 ```yaml
-# docker-compose override example
 environment:
-  - NANOSERVE_MODEL_PATH=/models/your-model.gguf
+  - NANOSERVE_MODELS_DIR=/models
 volumes:
-  - ./models:/models:ro
+  - ./models:/models
 ```
+
+Copy `.gguf` files into `./models/` on the host — they appear in the Web UI dropdown after restart (auto-registered). Select the model before generating with **Format: GGUF**.
 
 ---
 
@@ -88,15 +89,16 @@ Open **http://localhost:8000** (or host LAN IP — see [connect-network.md](conn
 5. Set **Precision** in the config grid (int8 default) before download
 6. Click **Download** — model appears in the **Model** dropdown
 
-### Use an existing file (manual register via API)
+### Use an existing `.gguf` or `.nanoq` file
 
-Copy a `.nanoq` or `.gguf` into `NANOSERVE_MODELS_DIR`, then register via API (Web UI lists registered models only).
+- **GGUF Docker:** copy into `./models/` → auto-registered at startup → select in dropdown
+- **Native:** copy into `$NANOSERVE_MODELS_DIR` → restart server or call sync (restart triggers `registry.sync_local()`)
 
 ### Generate with a model
 
-1. Select model in **Model** dropdown (or leave **Default** for synthetic demo)
-2. Set **Format:** Auto / Native (`.nanoq`) / GGUF
-3. Set **Precision** if converting raw weights
+1. **CPU demo (`:8000`):** leave **Built-in demo (no model)**, Format **Auto** — synthetic output only
+2. **GGUF (`:8002`):** select model in dropdown (**required**), Format **GGUF**
+3. Set **Precision** if converting raw safetensors weights
 4. Click **Generate**
 
 ---
@@ -179,15 +181,15 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ### GGUF inference
 
-Requires `[gguf]` installed and a `.gguf` file:
+Requires `[gguf]` installed and a `.gguf` file registered (or in `NANOSERVE_MODELS_DIR`):
 
 ```bash
-export NANOSERVE_MODEL_PATH=/path/to/model.gguf
-
-curl -X POST http://localhost:8000/v1/completions \
+curl -X POST http://localhost:8002/v1/completions \
   -H 'Content-Type: application/json' \
-  -d '{"prompt":"Hello","max_tokens":32,"format":"gguf","device":"cpu"}'
+  -d '{"prompt":"Hello","max_tokens":32,"format":"gguf","device":"cpu","model":"distilgpt2-Q2_K"}'
 ```
+
+`model` is **required** when `format=gguf` unless `NANOSERVE_MODEL_PATH` is set.
 
 ### API field reference
 
@@ -342,14 +344,13 @@ curl -X POST localhost:8000/v1/completions \
 
 **Option 2:** Download/register flow converts safetensors automatically; for pre-built `.nanoq`, edit `registry.json` or use SDK registry (advanced).
 
-### Step C — Default model via environment
+### Step C — Optional default via environment (advanced)
 
 ```bash
-export NANOSERVE_MODEL_PATH=/path/to/model.gguf   # or .nanoq
-# restart server
+export NANOSERVE_MODEL_PATH=/path/to/model.gguf   # optional fallback only
 ```
 
-Omitting `model` in requests then resolves to this path.
+Normally you **select** the model in Web UI / TUI / API instead of relying on this env var.
 
 ---
 
@@ -359,12 +360,12 @@ Omitting `model` in requests then resolves to this path.
 mkdir -p ./models
 cp /path/to/model.gguf ./models/
 
-NANOSERVE_GGUF_MODEL_DIR=./models \
-NANOSERVE_MODEL_PATH=/models/model.gguf \
 docker compose --profile gguf up --build
 ```
 
-Open http://localhost:8002 → **Format: GGUF** → Generate.
+Open http://localhost:8002 → **Model:** select your file → **Format: GGUF** → Generate.
+
+Verify: `curl -s localhost:8002/v1/models | jq .`
 
 ---
 
@@ -376,12 +377,12 @@ flowchart TD
   source -->|HF or URL| dl[POST /v1/models/download]
   source -->|Local safetensors| copy[Copy to models dir]
   source -->|Pre-built nanoq| path[Use model path in request]
-  source -->|GGUF file| gguf[Set NANOSERVE_MODEL_PATH]
+  source -->|GGUF file| gguf[Copy to models/ auto-register]
   dl --> quantize[Auto-quantize to .nanoq]
   copy --> quantize
   quantize --> registry[registry.json updated]
-  path --> infer[POST /v1/completions]
-  gguf --> infer
+  gguf --> registry
+  path --> infer[POST /v1/completions with model id]
   registry --> infer
   infer --> ui[Web UI / TUI / API / SDK]
 ```
@@ -409,9 +410,9 @@ flowchart TD
 |-------|-----|
 | `501 huggingface-hub required` | `pip install nanoserve[models]` (Docker: exec into container) |
 | Download OK but empty model list | Refresh Web UI; `GET /v1/models` |
-| Still demo output | Select model in UI/API; Default = synthetic weights |
-| GGUF fails | `ENABLE_GGUF=1` or GGUF Docker profile; set `NANOSERVE_MODEL_PATH` |
-| `Model not found` | Check `model_id` in registry; use full path |
+| Still demo output | CPU `:8000` = built-in demo; use `:8002` GGUF + selected model |
+| GGUF fails / 400 | Select model in UI/API; `format=gguf` requires `model` field |
+| `Model not found` | Check `model_id` in registry; `GET /v1/models` |
 | Quantize warning / raw fallback | Set `precision=int8`; check safetensors readable |
 | Docker no disk for HF | Mount volume for `NANOSERVE_MODELS_DIR` |
 | Large model OOM | Use Q4 GGUF; reduce `NANOSERVE_MAX_LOADED_MODELS` |
@@ -422,7 +423,7 @@ flowchart TD
 
 ```bash
 export NANOSERVE_MODELS_DIR="$HOME/.nanoserve/models"
-export NANOSERVE_MODEL_PATH=""              # optional default .nanoq / .gguf
+export NANOSERVE_MODEL_PATH=""              # optional fallback only — prefer UI/API model selection
 export NANOSERVE_AUTO_QUANTIZE="1"            # convert safetensors on use
 export NANOSERVE_DEFAULT_PRECISION="int8"
 export NANOSERVE_MAX_LOADED_MODELS="2"

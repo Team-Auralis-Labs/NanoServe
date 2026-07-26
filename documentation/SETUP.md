@@ -33,7 +33,8 @@ For GGUF production use a **single gunicorn worker** to avoid duplicating model 
 
 ```bash
 ENABLE_GGUF=1 ./install.sh
-export NANOSERVE_MODEL_PATH=/path/to/model.gguf
+# Select model via Web UI, TUI /model, or API — optional fallback:
+# export NANOSERVE_MODEL_PATH=/path/to/model.gguf
 export NANOSERVE_GGUF_N_GPU_LAYERS=0   # set >0 for GPU offload
 ```
 | **CUDA backend** | Working | INT8 GEMV kernel; verified on NVIDIA RTX 3060; CPU/CUDA output parity confirmed |
@@ -217,11 +218,15 @@ Priority for GPU: **CUDA → OpenCL → CPU fallback**.
 
 ## Docker deployment
 
+**Build hygiene:** `.dockerignore` excludes host `engine/build/`, `allocator/target/`, and venvs. Dockerfile sets `PYTHONPATH=/app`, wipes build dirs before compile, and uses `--break-system-packages` only on Ubuntu 24.04 CPU builder.
+
 ### CPU (default)
 
 ```bash
 docker compose up --build
 ```
+
+Port **8000** — **built-in synthetic demo** (not a real LLM). Web UI: **Built-in demo (no model)**, Format **Auto**.
 
 ### GPU profile
 
@@ -229,12 +234,26 @@ docker compose up --build
 docker compose --profile gpu up --build
 ```
 
+Requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) for GPU passthrough at runtime. Image build uses CUDA 12 devel + portable `engine/nvcc_wrapper.sh`.
+
 | Service | Port | Image target |
 |---------|------|--------------|
 | nanoserve | 8000 | runtime-cpu |
 | nanoserve-gpu | 8001 | runtime-gpu |
+| nanoserve-gguf | 8002 | runtime-gguf |
 
-Runtime images contain only compiled `.so` files and the Python wheel — no CUDA dev toolkit in the final CPU layer.
+### GGUF profile
+
+```bash
+mkdir -p models && cp your-model.gguf models/
+docker compose --profile gguf up --build
+```
+
+Port **8002** — `NANOSERVE_MODELS_DIR=/models`, auto-registers `.gguf` files. **Select model** in Web UI / API before `format=gguf`.
+
+Runtime images contain compiled `.so` files and the Python wheel — no CUDA dev toolkit in final CPU/GGUF layers.
+
+**Smoke test:** `bash scripts/audit_deployments.sh`
 
 ---
 
@@ -252,7 +271,7 @@ make -j$(nproc)
 
 **Status:** Verified working — tiled INT8 GEMV matmul kernel, buddy-allocator host buffers, CPU/CUDA parity on RTX 3060.
 
-CUDA 11.x + GCC 15 requires `engine/nvcc_wrapper.sh` and `g++-9` (configured in CMake when CUDA is enabled).
+CUDA 11.x–12.x: `engine/nvcc_wrapper.sh` resolves `nvcc` under `/usr/local/cuda` or `/usr/lib/cuda` and uses the system `g++` host compiler (configured in CMake when CUDA is enabled).
 
 ### OpenCL
 
@@ -353,11 +372,14 @@ LD_LIBRARY_PATH=allocator/target/release ./c_examples/pool_demo
 | Issue | Fix |
 |-------|-----|
 | `libnanoserve_engine.so: cannot open` | Set `NANOSERVE_ENGINE_LIB` and `LD_LIBRARY_PATH` |
-| GPU always falls back to CPU | Rebuild with `-DNANOSERVE_ENABLE_CUDA=ON`; check `nvidia-smi` |
-| CUDA build fails on GCC 15 | Use `g++-9` host compiler or CUDA 12+; see `engine/nvcc_wrapper.sh` |
+| `ModuleNotFoundError: server` in Docker | Rebuild image (`PYTHONPATH=/app` in Dockerfile) |
+| Docker build: CMakeCache path mismatch | Pull latest (`.dockerignore` + `rm -rf engine/build`); do not copy host build into context |
+| GPU always falls back to CPU | Rebuild with `-DNANOSERVE_ENABLE_CUDA=ON`; check `nvidia-smi`; Container Toolkit for Docker GPU |
+| CUDA Docker build fails (nvcc) | Ensure CUDA devel base; see `engine/nvcc_wrapper.sh` |
 | OpenCL not detected | Install `ocl-icd-opencl-dev opencl-headers`; rebuild with `-DNANOSERVE_ENABLE_OPENCL=ON` |
 | Import error for `nanoserve` | Run `pip install -e .` from repo root |
 | CMake version error | Requires CMake ≥ 3.22 |
+| GGUF requires model | Select in UI or pass `"model"` in API when `format=gguf` |
 
 ---
 

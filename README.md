@@ -72,35 +72,38 @@ flowchart TB
     TUI["TUI"]
   end
 
-  subgraph edge [Edge optional]
-    LB["nginx :8000\n300-user prod"]
+  subgraph edgeLayer [Edge optional]
+    LB["nginx port 8000"]
   end
 
-  API["FastAPI + micro-batcher"]
+  API["FastAPI micro-batcher"]
   Router["InferenceRouter"]
 
-  subgraph native [Native path default]
+  subgraph nativePath [Native path default]
     Pool["EnginePool"]
     Cpp["libnanoserve_engine.so"]
-    NanoQ[".nanoq v2\nint8 / fp16 / fp4"]
+    NanoQ["nanoq v2 weights"]
   end
 
-  subgraph gguf [GGUF path optional]
+  subgraph ggufPath [GGUF path optional]
     GPool["GGUFPool"]
     Llama["llama-cpp-python"]
-    GGUF[".gguf model"]
+    GGUFFile["gguf model file"]
   end
 
-  Registry["ModelRegistry\nHF + URL download"]
+  Registry["ModelRegistry downloads"]
 
-  clients --> LB
+  Web --> LB
+  TUI --> LB
   LB --> API
   SDK --> Router
   API --> Router
-  Router -->|"format=nanoq"| Pool
-  Router -->|"format=gguf"| GPool
-  Pool --> Cpp --> NanoQ
-  GPool --> Llama --> GGUF
+  Router -->|format nanoq| Pool
+  Router -->|format gguf| GPool
+  Pool --> Cpp
+  Cpp --> NanoQ
+  GPool --> Llama
+  Llama --> GGUFFile
   Router --> Registry
 ```
 
@@ -108,24 +111,26 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-  participant U as Client
-  participant F as FastAPI
-  participant B as Micro-batcher
-  participant R as InferenceRouter
-  participant N as Native / GGUF
+  participant Client
+  participant FastAPI
+  participant Batcher as MicroBatcher
+  participant Router as InferenceRouter
+  participant Runtime as NativeOrGGUF
 
-  U->>F: POST /v1/completions
-  Note over U,F: model, format, precision, device
-  F->>B: enqueue
-  B->>B: batch window ≤32 / 25ms
-  B->>R: submit
-  alt format=nanoq
-    R->>N: EnginePool GEMV
-  else format=gguf
-    R->>N: llama-cpp infer
+  Client->>FastAPI: POST /v1/completions
+  Note over Client,FastAPI: model format precision device
+  FastAPI->>Batcher: enqueue
+  Batcher->>Batcher: batch up to 32 in 25ms window
+  Batcher->>Router: submit
+  alt native nanoq format
+    Router->>Runtime: EnginePool GEMV
+  else gguf format
+    Router->>Runtime: llama-cpp infer
   end
-  N-->>F: tokens + warnings
-  F-->>U: JSON response
+  Runtime-->>Router: tokens and warnings
+  Router-->>Batcher: result
+  Batcher-->>FastAPI: completions
+  FastAPI-->>Client: JSON response
 ```
 
 ---

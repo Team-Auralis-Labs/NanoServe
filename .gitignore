@@ -46,7 +46,7 @@ engine/build/
 # OS
 .DS_Store
 Thumbs.db
-
+models/
 # NanoServe runtime / models (user-local)
 .nanoserve/
 *.nanoq

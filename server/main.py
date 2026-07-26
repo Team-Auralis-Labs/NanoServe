@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -144,9 +144,9 @@ async def startup():
     asyncio.create_task(batcher_loop())
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 async def index():
-    return (APP_DIR / "static" / "index.html").read_text()
+    return RedirectResponse(url="/static/index.html")
 
 
 @app.get("/health")

@@ -53,6 +53,9 @@ Thumbs.db
 *.gguf
 *.safetensors
 
+# Local-only planning docs (implemented; not published)
+TODO-plan-GGUF.md
+
 # Logs & temp
 *.log
 /tmp/

@@ -5,7 +5,7 @@ import ctypes
 import enum
 import os
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _LIB_CACHE: dict[str, ctypes.CDLL] = {}
@@ -35,7 +35,10 @@ class BackendKind(enum.IntEnum):
 class InferResult:
     text: str
     device: str
-    warnings: list[str]
+    warnings: list[str] = field(default_factory=list)
+    format: str = "nanoq"
+    model: str | None = None
+    quantized: bool = True
 
 
 class EngineWorker:
@@ -43,12 +46,23 @@ class EngineWorker:
 
     _local = threading.local()
 
-    def __init__(self, lib_path: str | None = None, backend: BackendKind = BackendKind.CPU):
+    def __init__(
+        self,
+        lib_path: str | None = None,
+        backend: BackendKind = BackendKind.CPU,
+        model_path: str | None = None,
+    ):
         path = lib_path or _default_lib_path()
         self.lib = _load_lib(path)
         self.lib.engine_init.restype = ctypes.c_void_p
         self.lib.engine_init_backend.restype = ctypes.c_void_p
         self.lib.engine_init_backend.argtypes = [ctypes.c_int]
+        self.lib.engine_init_with_model.restype = ctypes.c_void_p
+        self.lib.engine_init_with_model.argtypes = [ctypes.c_char_p, ctypes.c_int]
+        self.lib.engine_reload_model.restype = ctypes.c_int
+        self.lib.engine_reload_model.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self.lib.engine_model_info.restype = ctypes.c_char_p
+        self.lib.engine_model_info.argtypes = [ctypes.c_void_p]
         self.lib.engine_infer.restype = ctypes.c_int
         self.lib.engine_infer.argtypes = [
             ctypes.c_void_p,
@@ -63,6 +77,7 @@ class EngineWorker:
         self.lib.engine_backend_name.argtypes = [ctypes.c_int]
         self.lib.engine_cleanup.argtypes = [ctypes.c_void_p]
         self.backend = backend
+        self.model_path = model_path
 
     @classmethod
     def probe_cuda(cls, lib_path: str | None = None) -> bool:
@@ -77,9 +92,13 @@ class EngineWorker:
         return bool(lib.engine_probe_opencl())
 
     def _handle(self):
-        key = f"handle_{self.backend.name}"
+        key = f"handle_{self.backend.name}_{self.model_path or 'default'}"
         if not hasattr(self._local, key):
-            if self.backend == BackendKind.CPU:
+            if self.model_path:
+                handle = self.lib.engine_init_with_model(
+                    self.model_path.encode("utf-8"), int(self.backend)
+                )
+            elif self.backend == BackendKind.CPU:
                 handle = self.lib.engine_init()
             else:
                 handle = self.lib.engine_init_backend(int(self.backend))
@@ -88,8 +107,18 @@ class EngineWorker:
             setattr(self._local, key, handle)
         return getattr(self._local, key)
 
+    def reload_model(self, model_path: str) -> None:
+        rc = self.lib.engine_reload_model(self._handle(), model_path.encode("utf-8"))
+        if rc != 0:
+            raise RuntimeError(f"Failed to reload model: {model_path}")
+        self.model_path = model_path
+
+    def model_info(self) -> str:
+        info = self.lib.engine_model_info(self._handle())
+        return info.decode("utf-8") if info else "{}"
+
     def cleanup(self) -> None:
-        key = f"handle_{self.backend.name}"
+        key = f"handle_{self.backend.name}_{self.model_path or 'default'}"
         if hasattr(self._local, key):
             handle = getattr(self._local, key)
             if handle:

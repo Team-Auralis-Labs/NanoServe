@@ -47,8 +47,10 @@ class EnginePool:
             if self._gpu_state.available
             else None
         )
-        self._cpu_local = threading.local()
-        self._gpu_local = threading.local()
+        self._cpu_workers: dict[tuple[str | None, str], EngineWorker] = {}
+        self._gpu_workers_map: dict[tuple[str | None, str], EngineWorker] = {}
+        self._cpu_lock = threading.Lock()
+        self._gpu_lock = threading.Lock()
 
     def _detect_gpu(self) -> _GpuState:
         cuda = EngineWorker.probe_cuda(self.lib_path)
@@ -71,19 +73,38 @@ class EnginePool:
     def gpu_available(self) -> bool:
         return self._gpu_state.available
 
-    def _cpu_infer(self, prompt: str, max_tokens: int) -> InferResult:
-        if not hasattr(self._cpu_local, "worker"):
-            self._cpu_local.worker = EngineWorker(self.lib_path, BackendKind.CPU)
-        text = self._cpu_local.worker.infer(prompt, max_tokens)
-        return InferResult(text=text, device="cpu", warnings=[])
+    def _get_worker(
+        self,
+        model_path: str | None,
+        backend: BackendKind,
+        store: dict,
+        lock: threading.Lock,
+    ) -> EngineWorker:
+        key = (model_path, backend.name)
+        with lock:
+            if key not in store:
+                store[key] = EngineWorker(self.lib_path, backend, model_path=model_path)
+            return store[key]
 
-    def _gpu_infer(self, prompt: str, max_tokens: int) -> InferResult:
-        if not hasattr(self._gpu_local, "worker"):
-            if not self._gpu_state.backend:
-                raise RuntimeError("GPU backend unavailable")
-            self._gpu_local.worker = EngineWorker(self.lib_path, self._gpu_state.backend)
-        text = self._gpu_local.worker.infer(prompt, max_tokens)
-        return InferResult(text=text, device=self._gpu_state.backend_name, warnings=[])
+    def _cpu_infer(self, prompt: str, max_tokens: int, model_path: str | None) -> InferResult:
+        worker = self._get_worker(model_path, BackendKind.CPU, self._cpu_workers, self._cpu_lock)
+        text = worker.infer(prompt, max_tokens)
+        return InferResult(text=text, device="cpu", warnings=[], model=model_path, format="nanoq")
+
+    def _gpu_infer(self, prompt: str, max_tokens: int, model_path: str | None) -> InferResult:
+        if not self._gpu_state.backend:
+            raise RuntimeError("GPU backend unavailable")
+        worker = self._get_worker(
+            model_path, self._gpu_state.backend, self._gpu_workers_map, self._gpu_lock,
+        )
+        text = worker.infer(prompt, max_tokens)
+        return InferResult(
+            text=text,
+            device=self._gpu_state.backend_name,
+            warnings=[],
+            model=model_path,
+            format="nanoq",
+        )
 
     def _resolve_device(self, device: DeviceLiteral) -> tuple[str, list[str]]:
         if device == "cpu":
@@ -92,18 +113,23 @@ class EnginePool:
             if self._gpu_state.available:
                 return self._gpu_state.backend_name, []
             return "cpu", ["GPU requested but unavailable; fell back to CPU"]
-        # auto
         if self._gpu_state.available:
             return self._gpu_state.backend_name, []
         logger.debug("auto device: no GPU backend, using CPU")
         return "cpu", []
 
-    def submit(self, prompt: str, max_tokens: int, device: DeviceLiteral = "cpu"):
+    def submit(
+        self,
+        prompt: str,
+        max_tokens: int,
+        device: DeviceLiteral = "cpu",
+        model_path: str | None = None,
+    ):
         target, warnings = self._resolve_device(device)
         use_gpu = target in ("cuda", "opencl")
 
         if use_gpu and self.gpu_executor:
-            fut = self.gpu_executor.submit(self._gpu_infer, prompt, max_tokens)
+            fut = self.gpu_executor.submit(self._gpu_infer, prompt, max_tokens, model_path)
 
             def wrapped():
                 try:
@@ -112,7 +138,7 @@ class EnginePool:
                         result.warnings.extend(warnings)
                     return result
                 except Exception:
-                    cpu_result = self._cpu_infer(prompt, max_tokens)
+                    cpu_result = self._cpu_infer(prompt, max_tokens, model_path)
                     cpu_result.warnings.append("GPU execution failed; fell back to CPU")
                     cpu_result.warnings.extend(warnings)
                     return cpu_result
@@ -120,7 +146,7 @@ class EnginePool:
             return self.cpu_executor.submit(wrapped)
 
         def cpu_wrapped():
-            result = self._cpu_infer(prompt, max_tokens)
+            result = self._cpu_infer(prompt, max_tokens, model_path)
             result.warnings.extend(warnings)
             return result
 

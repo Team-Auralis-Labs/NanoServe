@@ -7,6 +7,8 @@ cd "$ROOT"
 
 ENABLE_CUDA="${ENABLE_CUDA:-0}"
 ENABLE_OPENCL="${ENABLE_OPENCL:-0}"
+ENABLE_GGUF="${ENABLE_GGUF:-0}"
+ENABLE_MODELS="${ENABLE_MODELS:-1}"
 
 echo "[*] NanoServe install — $ROOT"
 
@@ -53,6 +55,12 @@ fi
 # shellcheck source=/dev/null
 source .venv/bin/activate
 pip install -q -e ".[server]"
+if [ "$ENABLE_MODELS" = "1" ]; then
+  pip install -q -e ".[models]"
+fi
+if [ "$ENABLE_GGUF" = "1" ]; then
+  pip install -q -e ".[gguf]"
+fi
 
 ENV_FILE="$ROOT/.env.nanoserve"
 cat > "$ENV_FILE" <<EOF
@@ -62,7 +70,21 @@ export PYTHONPATH="$ROOT:\$PYTHONPATH"
 export NANOSERVE_NUM_WORKERS="\$(nproc)"
 export NANOSERVE_MAX_BATCH="32"
 export NANOSERVE_MAX_QUEUE="512"
+export NANOSERVE_MODELS_DIR="$HOME/.nanoserve/models"
+export NANOSERVE_AUTO_QUANTIZE="1"
+export NANOSERVE_MAX_LOADED_MODELS="2"
 EOF
+
+if [ "$ENABLE_GGUF" = "1" ]; then
+  cat >> "$ENV_FILE" <<'EOF'
+export NANOSERVE_DEFAULT_FORMAT="auto"
+export NANOSERVE_GGUF_N_CTX="2048"
+export NANOSERVE_GGUF_N_THREADS="0"
+export NANOSERVE_GGUF_N_GPU_LAYERS="0"
+export NANOSERVE_GGUF_N_BATCH="512"
+EOF
+  echo "[*] GGUF extra installed — set NANOSERVE_MODEL_PATH to a .gguf file to use format=gguf"
+fi
 
 echo ""
 echo "[+] Done. Run:"

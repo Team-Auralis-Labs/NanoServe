@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.egg
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+.env.nanoserve
+
+# Rust / C++ build artifacts
+allocator/target/
+engine/build/
+*.o
+*.a
+*.dylib
+*.dll
+
+# IDE & editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# NanoServe runtime / models (user-local)
+.nanoserve/
+*.nanoq
+*.gguf
+*.safetensors
+
+# Logs & temp
+*.log
+/tmp/
+*.tmp
+
+# Generated docs (keep source MD/HTML)
+documentation/reports/*.pdf

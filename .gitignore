@@ -70,3 +70,8 @@ deployment/wasm/assets/demo.nanoq
 
 # Generated docs (keep source MD/HTML)
 documentation/reports/*.pdf
+documentation/Documentation.pdf
+documentation/diagrams/
+documentation/generate_pdf.py
+documentation/Documentation-not-distilled.pdf
+scripts/generate_documentation_pdf.py

@@ -409,4 +409,12 @@ Optional browser tier: `./scripts/build_wasm.sh` (requires Emscripten)
 
 ## License
 
-See repository license file.
+Copyright 2026 [Auralis Labs](https://github.com/Team-Auralis-Labs).
+
+NanoServe is licensed under the **Apache License, Version 2.0**. See [LICENSE](LICENSE) for the full text.
+
+**Commercial use:** Permitted under Apache-2.0, including use in proprietary products and services, provided you comply with the license (retain copyright notices, document changes, and include a copy of the License when distributing).
+
+**Third-party components:** Optional Python extras (`[server]`, `[models]`, `[gguf]`, etc.) pull dependencies under their own licenses. Model weights (GGUF, Hugging Face, etc.) are governed by their respective terms, separate from this codebase.
+
+This summary is not legal advice; consult qualified counsel for commercial packaging or redistribution.

@@ -44,12 +44,12 @@ class TestGGUF(unittest.TestCase):
     def test_gguf_fallback_without_extra(self):
         if not Path(os.environ["NANOSERVE_ENGINE_LIB"]).exists():
             self.skipTest("Engine not built")
-        router = InferenceRouter(num_workers=1)
         gguf = Path("/tmp/fake_gguf_test.gguf")
         gguf.write_bytes(b"GGUF")
         try:
-            r = router.submit("hi", 4, model=str(gguf), format="gguf").result()
-            if not router.gguf_available:
+            with patch("nanoserve.engine.router.gguf_available", return_value=False):
+                router = InferenceRouter(num_workers=1)
+                r = router.submit("hi", 4, model=str(gguf), format="gguf").result()
                 self.assertEqual(r.format, "nanoq")
                 self.assertTrue(any("GGUF" in w for w in r.warnings))
         finally:

@@ -52,7 +52,18 @@ public:
         if (ctx_) clReleaseContext(ctx_);
     }
 
-    float gemv_int8(std::span<const int8_t> weights, std::span<const float> acts) override {
+    float gemv_int8(std::span<const int8_t> weights, std::span<const float> scales,
+                    std::span<const float> acts) override {
+        if (!scales.empty() || (pool_view_.nanoq && !pool_view_.nanoq->scales.empty())) {
+            const auto& s = !scales.empty() ? scales : std::span<const float>(pool_view_.nanoq->scales);
+            float acc = 0.0f;
+            size_t n = std::min(weights.size(), acts.size());
+            for (size_t i = 0; i < n; ++i) {
+                float sc = s[std::min(i, s.size() - 1)];
+                acc += static_cast<float>(weights[i]) * sc * acts[i];
+            }
+            return acc;
+        }
         size_t n = std::min(weights.size(), acts.size());
         ensure_buffers(n);
 

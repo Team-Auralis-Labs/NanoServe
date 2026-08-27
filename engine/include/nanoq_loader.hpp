@@ -1,5 +1,7 @@
 #pragma once
+#include "nanoq_archive.hpp"
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -26,6 +28,22 @@ struct NanoqModel {
     const char* dtype_str() const;
 };
 
+enum class NanoqFormat : int {
+    V2Legacy = 0,
+    V3Archive = 1,
+};
+
+struct NanoqLoadedModel {
+    NanoqFormat format = NanoqFormat::V2Legacy;
+    bool legacy_demo = false;
+    NanoqModel v2;
+    NanoqArchiveV3 v3;
+
+    std::string info_json() const;
+};
+
 bool nanoq_load_file(const char* path, NanoqModel& out, std::string& err);
 bool nanoq_load_buffer(const uint8_t* data, size_t len, NanoqModel& out, std::string& err);
+bool nanoq_load_unified_file(const char* path, NanoqLoadedModel& out, std::string& err);
+bool nanoq_load_unified_buffer(const uint8_t* data, size_t len, NanoqLoadedModel& out, std::string& err);
 std::string nanoq_model_info_json(const NanoqModel& m);

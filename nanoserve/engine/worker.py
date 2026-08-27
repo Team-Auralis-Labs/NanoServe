@@ -76,6 +76,10 @@ class EngineWorker:
         self.lib.engine_backend_name.restype = ctypes.c_char_p
         self.lib.engine_backend_name.argtypes = [ctypes.c_int]
         self.lib.engine_cleanup.argtypes = [ctypes.c_void_p]
+        self.lib.engine_reset_kv = getattr(self.lib, "engine_reset_kv", None)
+        if self.lib.engine_reset_kv:
+            self.lib.engine_reset_kv.restype = ctypes.c_int
+            self.lib.engine_reset_kv.argtypes = [ctypes.c_void_p]
         self.backend = backend
         self.model_path = model_path
 
@@ -124,6 +128,10 @@ class EngineWorker:
             if handle:
                 self.lib.engine_cleanup(handle)
             delattr(self._local, key)
+
+    def reset_kv(self) -> None:
+        if self.lib.engine_reset_kv:
+            self.lib.engine_reset_kv(self._handle())
 
     def infer(self, prompt: str, max_tokens: int = 24) -> str:
         buf = ctypes.create_string_buffer(4096)

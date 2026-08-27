@@ -28,12 +28,17 @@ htmlcov/
 .env.nanoserve
 
 # Rust / C++ build artifacts
+**/target/
 allocator/target/
 engine/build/
 *.o
 *.a
 *.dylib
 *.dll
+
+# Native test binaries (compiled by scripts/valgrind.sh)
+tests/valgrind_engine
+tests/valgrind_engine_ext
 
 # IDE & editors
 .idea/
@@ -68,8 +73,18 @@ deployment/wasm/assets/demo.nanoq
 /tmp/
 *.tmp
 
+# Generated test / benchmark outputs (re-run scripts to recreate)
+documentation/valgrind_report.txt
+documentation/valgrind_report_extended.txt
+documentation/load_*.json
+documentation/load_test_results.json
+documentation/memory_rss_server.json
+documentation/reports/*_LOAD.json
+documentation/reports/PHASE*_LOAD.json
+
 # Generated docs (keep source MD/HTML)
 documentation/reports/*.pdf
+documentation/reports/*.html
 documentation/Documentation.pdf
 documentation/diagrams/
 documentation/generate_pdf.py

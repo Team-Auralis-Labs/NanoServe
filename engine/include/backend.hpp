@@ -41,10 +41,17 @@ struct PoolBufferView {
 class ComputeBackend {
 public:
     virtual ~ComputeBackend() = default;
-    virtual float gemv_int8(std::span<const int8_t> weights, std::span<const float> acts) = 0;
+    virtual float gemv_int8(std::span<const int8_t> weights, std::span<const float> scales,
+                            std::span<const float> acts) = 0;
     virtual float gemv_fp16(std::span<const uint16_t> weights, std::span<const float> acts) = 0;
     virtual float gemv_fp4(std::span<const uint8_t> packed, std::span<const float> scales,
                            int block_size, std::span<const float> acts) = 0;
+    virtual void gemm_int8(std::span<const int8_t> weights, std::span<const float> scales,
+                           std::span<const float> input, std::span<float> output,
+                           int rows, int cols, int out_dim) {
+        (void)weights; (void)scales; (void)input; (void)output;
+        (void)rows; (void)cols; (void)out_dim;
+    }
     virtual void bind_pool_buffers(const PoolBufferView& view) { pool_view_ = view; }
     virtual const char* name() const = 0;
 

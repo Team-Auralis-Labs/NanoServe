@@ -1,4 +1,5 @@
 #include "nanoq_loader.hpp"
+#include "nanoq_runtime_ffi.h"
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -132,9 +133,70 @@ const char* NanoqModel::dtype_str() const {
 std::string nanoq_model_info_json(const NanoqModel& m) {
     char buf[256];
     std::snprintf(buf, sizeof(buf),
-        "{\"dtype\":\"%s\",\"rows\":%d,\"cols\":%d,\"version\":%d,\"length\":%zu}",
+        "{\"dtype\":\"%s\",\"rows\":%d,\"cols\":%d,\"version\":%d,\"length\":%zu,\"legacy_demo\":true}",
         m.dtype_str(), m.rows, m.cols, m.version, m.flat_len());
     return buf;
+}
+
+std::string NanoqLoadedModel::info_json() const {
+    if (format == NanoqFormat::V3Archive) return v3.model_info_json();
+    return nanoq_model_info_json(v2);
+}
+
+bool nanoq_load_unified_buffer(const uint8_t* data, size_t len, NanoqLoadedModel& out, std::string& err) {
+    out = NanoqLoadedModel{};
+    if (!data || len < 4) {
+        err = "empty buffer";
+        return false;
+    }
+    if (nanoq_is_v3_magic(data, len)) {
+        if (nanoq_archive_validate(data, len) != 0) {
+            err = "v3 validation failed";
+            return false;
+        }
+        if (!nanoq_archive_load_v3_buffer(data, len, out.v3, err)) return false;
+        out.format = NanoqFormat::V3Archive;
+        out.legacy_demo = false;
+        return true;
+    }
+    if (!nanoq_load_buffer(data, len, out.v2, err)) return false;
+    out.format = NanoqFormat::V2Legacy;
+    out.legacy_demo = true;
+    return true;
+}
+
+bool nanoq_load_unified_file(const char* path, NanoqLoadedModel& out, std::string& err) {
+    if (!path || !path[0]) {
+        err = "empty path";
+        return false;
+    }
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    if (!f) {
+        err = "cannot open file";
+        return false;
+    }
+    auto size = static_cast<size_t>(f.tellg());
+    f.seekg(0);
+    std::vector<uint8_t> buf(size);
+    f.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(size));
+    if (!f) {
+        err = "read failed";
+        return false;
+    }
+    if (nanoq_is_v3_magic(buf.data(), buf.size())) {
+        if (nanoq_archive_validate_path(path) != 0) {
+            err = "v3 validation failed";
+            return false;
+        }
+        if (!nanoq_archive_load_v3(path, out.v3, err)) return false;
+        out.format = NanoqFormat::V3Archive;
+        out.legacy_demo = false;
+        return true;
+    }
+    if (!nanoq_load_file(path, out.v2, err)) return false;
+    out.format = NanoqFormat::V2Legacy;
+    out.legacy_demo = true;
+    return true;
 }
 
 bool nanoq_load_file(const char* path, NanoqModel& out, std::string& err) {

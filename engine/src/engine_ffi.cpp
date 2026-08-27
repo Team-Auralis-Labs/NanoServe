@@ -45,6 +45,10 @@ int engine_infer(void* handle, const char* prompt, int max_tokens, char* out_buf
     return engine_run_infer(static_cast<EngineHandle*>(handle), prompt, max_tokens, out_buf, out_buf_len);
 }
 
+int engine_reset_kv(void* handle) {
+    return engine_reset_kv_cache(static_cast<EngineHandle*>(handle));
+}
+
 void engine_cleanup(void* handle) {
     engine_destroy_handle(static_cast<EngineHandle*>(handle));
 }

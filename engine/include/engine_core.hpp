@@ -1,6 +1,7 @@
 #pragma once
 #include "backend.hpp"
 #include "nanoq_loader.hpp"
+#include "transformer.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -14,7 +15,12 @@ struct EngineHandle {
     EngineBackendKind backend_kind = EngineBackendKind::Cpu;
     std::unique_ptr<ComputeBackend> backend;
     NanoqModel model;
+    NanoqLoadedModel loaded;
     bool has_model = false;
+    bool is_v3 = false;
+    bool legacy_demo = false;
+    void* tokenizer = nullptr;
+    std::unique_ptr<TransformerModel> transformer;
     std::string model_path;
     std::string model_info_json;
 };
@@ -27,4 +33,5 @@ int engine_reload_model(EngineHandle* h, const char* nanoq_path);
 int engine_reload_model_bytes(EngineHandle* h, const uint8_t* data, size_t len);
 const char* engine_get_model_info(EngineHandle* h);
 int engine_run_infer(EngineHandle* h, const char* prompt, int max_tokens, char* out_buf, int out_buf_len);
+int engine_reset_kv_cache(EngineHandle* h);
 void engine_destroy_handle(EngineHandle* h);

@@ -22,6 +22,36 @@
 </p>
 
 ---
+## The Problem
+
+Running local AI inference on small, CPU-based deployments often means choosing between
+heavy inference stacks that are optimized for large-scale serving and lower-level runtimes
+that can be difficult to integrate and customize. For developers building small AI-powered
+applications, the real requirement is often simpler: run inference reliably with a small
+memory footprint, predictable resource usage, and an architecture that is easy to understand,
+deploy, and extend.
+
+## The Solution
+
+**NanoServe is a lightweight, embeddable inference server designed for resource-constrained
+deployments where simplicity, memory efficiency, and control matter more than maximum
+throughput.**
+
+NanoServe separates responsibilities across three focused layers:
+
+- **Python** — provides the application/API layer.
+- **C++** — handles native inference computation and SIMD-optimized operations.
+- **Rust** — provides controlled memory management through a custom buddy allocator.
+
+Instead of repeatedly relying on the operating system for allocations, NanoServe reserves
+memory arenas and manages reusable blocks internally. This provides predictable memory
+behavior while keeping the performance-critical inference path in native code.
+
+The goal is not to replace large-scale inference engines such as vLLM or llama.cpp at their
+own strengths. NanoServe focuses on a different problem:
+
+> **Making local AI inference small, understandable, embeddable, and practical for
+> CPU-based applications with limited resources.**
 
 ## What's new
 

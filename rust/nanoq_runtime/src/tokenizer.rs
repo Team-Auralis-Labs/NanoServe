@@ -61,9 +61,8 @@ pub extern "C" fn nanoq_tokenizer_encode(
         return -1;
     }
     let h = unsafe { &*handle };
-    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
-        Ok(valid_str) => valid_str,
-        Err(_) => return -2,
+    let Ok(s) = unsafe { CStr::from_ptr(text) }.to_str() else {
+        return -2;
     };
     let ids = h.encode(s, max_ids);
     let n = ids.len().min(max_ids);

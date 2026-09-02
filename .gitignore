@@ -61,6 +61,7 @@ models/
 # Local-only planning docs (implemented; not published)
 TODO-plan-GGUF.md
 TODO-WASM-LEAN.md
+NOTES-tokenizer-ffi-utf8-validation.md
 
 # WASM build artifacts (opt-in browser demo)
 engine/build-wasm/
